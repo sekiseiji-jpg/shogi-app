@@ -1,0 +1,17 @@
+{
+  "name": "本将棋 - CPU対戦",
+  "short_name": "本将棋",
+  "description": "本格将棋。CPU対戦・駒落ち・指導・感想戦・詰将棋60問・棋譜保存・対局時計。",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1c1712",
+  "theme_color": "#1c1712",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

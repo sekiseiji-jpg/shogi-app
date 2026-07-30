@@ -1,0 +1,1692 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>本将棋 - CPU対戦</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c1712">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="本将棋">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root{
+    --wood:#e8b968; --wood-dark:#c8933b; --line:#4a3010;
+    --koma-edge:#7a5216; --koma1:#fbe7bd; --koma2:#e6c477;
+    --bg:#1c1712; --panel:#2a2018; --text:#f4e9d4; --accent:#d8a24a;
+  }
+  body[data-theme="light"]{ --wood:#f1d89c; --wood-dark:#e0bd77; --line:#6a4a1a; }
+  body[data-theme="walnut"]{ --wood:#c69a58; --wood-dark:#9a6d34; --line:#33230c;
+    --koma1:#f0dcae; --koma2:#dcb768; --koma-edge:#5c3d10; }
+  body[data-theme="night"]{ --bg:#0d0d12; --panel:#1a1a22; --wood:#c8a15c; --wood-dark:#8c6832;
+    --line:#2a1c08; --text:#ece2cf; }
+  body[data-theme="washi"]{ --bg:#e9e2d0; --panel:#d8cdb2; --wood:#efe4c6; --wood-dark:#ddcb9e;
+    --line:#8a7550; --koma1:#fdf6e3; --koma2:#efe0bb; --koma-edge:#8a6a34; --text:#3a2c14; --accent:#a06a1e; }
+  body[data-theme="ai"]{ --bg:#10161e; --panel:#1a2430; --wood:#6f97b8; --wood-dark:#4c7091;
+    --line:#1a2c3a; --koma1:#eef4f8; --koma2:#cdd9e2; --koma-edge:#2c4658; --text:#e6eef5; --accent:#7fb2d8; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:"Hiragino Mincho ProN","Yu Mincho",serif;
+    -webkit-user-select:none;user-select:none;}
+  #app{max-width:560px;margin:0 auto;padding:10px 8px 30px;}
+  #layout{display:block;}
+  .col-menu,.col-game,.col-info{min-width:0;}
+
+  /* 広い画面（PC等）：盤を左、メニューと棋譜を右サイドに置いて画面を有効活用 */
+  @media (min-width:860px){
+    #app{max-width:960px;}
+    #layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;
+      grid-template-areas:"game menu" "game info";gap:18px;align-items:start;}
+    .col-game{grid-area:game;}
+    .col-menu{grid-area:menu;}
+    .col-info{grid-area:info;}
+    .col-game .board{max-width:600px;margin:0 auto;}
+    .col-game .stand{max-width:600px;margin-left:auto;margin-right:auto;}
+    /* サイドではツールバーを縦並びのメニューに */
+    .toolbar{flex-direction:column;align-items:stretch;gap:8px;margin-bottom:12px;}
+    .toolbar>label{width:100%;}
+    .main-row,#tsumeControls,#settingsPanel{display:flex;flex-wrap:wrap;gap:6px;}
+    .main-row>button,#tsumeControls>button{flex:1 1 40%;}
+    .main-row>label,#settingsPanel>label{flex:1 1 100%;}
+    /* 縦スペースを活かして棋譜を長く表示 */
+    .kifu-wrap{margin-top:0;}
+    .kifu{max-height:420px;}
+    h1{text-align:left;padding-left:4px;}
+  }
+  h1{text-align:center;font-size:22px;letter-spacing:.15em;margin:6px 0 8px;
+    color:var(--accent);text-shadow:0 1px 0 #000;}
+
+  .toolbar{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:8px;}
+  .toolbar button, .toolbar select{
+    background:var(--panel);color:var(--text);border:1px solid #5a4630;
+    border-radius:8px;padding:7px 12px;font-size:14px;font-family:inherit;cursor:pointer;}
+  .toolbar button:active{transform:translateY(1px);}
+  .toolbar button:disabled{opacity:.4;cursor:default;}
+  .main-row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;align-items:center;}
+  #settingsPanel{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:100%;
+    margin-top:8px;padding-top:8px;border-top:1px dashed #5a4630;}
+  #settingsToggle{border-color:var(--accent);color:var(--accent);}
+  .toolbar label{display:flex;align-items:center;gap:4px;font-size:13px;
+    background:var(--panel);border:1px solid #5a4630;border-radius:8px;padding:2px 8px;}
+  .hidden{display:none !important;}
+
+  .stand{background:linear-gradient(160deg,#3a2c1c,#241a12);
+    border:2px solid #5a4630;border-radius:10px;padding:6px 8px;min-height:52px;
+    display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+  .stand.top{margin-bottom:8px;}
+  .stand.bottom{margin-top:8px;}
+  .stand-label{font-size:12px;color:#c9b48c;width:100%;margin-bottom:2px;
+    display:flex;justify-content:space-between;align-items:center;}
+  .lbl-right{display:flex;align-items:center;gap:8px;}
+  .clock{font-family:"Courier New",monospace;font-weight:700;font-size:15px;
+    background:#1c1712;border:1px solid #5a4630;border-radius:6px;padding:1px 8px;color:#e8d8b0;letter-spacing:.5px;}
+  .clock.active{border-color:var(--accent);color:#fff;box-shadow:0 0 0 1px var(--accent) inset;}
+  .clock.low{color:#ff8a6a;border-color:#b04030;}
+  .clock.active.low{box-shadow:0 0 0 1px #ff6a4a inset;}
+  .hand-piece{position:relative;cursor:pointer;}
+  .hand-count{position:absolute;right:-3px;bottom:-4px;background:#b03030;color:#fff;
+    font-size:11px;line-height:1;padding:1px 4px;border-radius:8px;font-family:sans-serif;
+    border:1px solid #fff;}
+
+  .board{display:grid;grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(9,1fr);
+    aspect-ratio:1/1;width:100%;
+    background:linear-gradient(150deg,var(--wood),var(--wood-dark));
+    border:6px solid #6b4a1e;border-radius:4px;
+    box-shadow:0 8px 22px rgba(0,0,0,.55), inset 0 0 30px rgba(120,70,10,.35);
+    position:relative;}
+  .cell{position:relative;display:flex;align-items:center;justify-content:center;
+    border-right:1px solid var(--line);border-bottom:1px solid var(--line);}
+  .cell[data-col="0"]{border-left:1px solid var(--line);}
+  .cell[data-row="0"]{border-top:1px solid var(--line);}
+  .cell.sel{background:rgba(255,220,90,.5);}
+  .cell.lastfrom{background:rgba(120,180,255,.22);}
+  .cell.lastto{background:rgba(120,180,255,.4);}
+  .dot{position:absolute;width:26%;height:26%;border-radius:50%;
+    background:rgba(30,90,30,.5);pointer-events:none;}
+  .dot.cap{width:78%;height:78%;border-radius:8px;background:transparent;
+    border:3px solid rgba(200,40,40,.7);}
+
+  .koma{width:86%;height:86%;position:relative;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    filter:drop-shadow(0 2px 2px rgba(0,0,0,.4));}
+  .koma .edge{position:absolute;inset:0;background:var(--koma-edge);
+    clip-path:polygon(50% 3%, 82% 22%, 92% 97%, 8% 97%, 18% 22%);
+    transform:scale(1.06);z-index:0;}
+  .koma .shape{position:absolute;inset:0;z-index:1;
+    background:linear-gradient(160deg,var(--koma1),var(--koma2));
+    clip-path:polygon(50% 3%, 82% 22%, 92% 97%, 8% 97%, 18% 22%);}
+  .koma .label{position:relative;z-index:2;font-weight:700;line-height:.92;color:#2a1a06;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-size:min(4.6vw,26px);text-align:center;}
+  .koma.two .label{font-size:min(3.1vw,17px);}
+  .koma.promoted .label{color:#a3241a;}
+  .koma.gote{transform:rotate(180deg);}
+  .koma.hand{width:30px;height:33px;}
+  .koma.hand .label{font-size:16px;}
+
+  .status{text-align:center;margin:6px 0;font-size:15px;min-height:22px;}
+  .status.check{color:#ff8a6a;font-weight:700;}
+  .status.warn{color:#ffd27a;}
+
+  /* 棋譜 */
+  .kifu-wrap{margin-top:10px;background:var(--panel);border:1px solid #5a4630;
+    border-radius:10px;padding:8px 10px;}
+  .kifu-head{font-size:12px;color:#c9b48c;margin-bottom:4px;}
+  .kifu{max-height:120px;overflow-y:auto;font-size:14px;line-height:1.6;
+    display:flex;flex-direction:column;}
+  .kifu .kline{display:flex;gap:8px;padding:1px 2px;border-radius:4px;}
+  .kifu .kline .no{color:#9a8a6a;width:34px;text-align:right;font-family:sans-serif;font-size:12px;}
+  .kifu .kline{cursor:pointer;}
+  .kifu .kline:hover{background:rgba(216,162,74,.10);}
+  .kifu .kline.latest{background:rgba(216,162,74,.22);}
+  .kifu-head{display:flex;justify-content:space-between;align-items:center;}
+  .kifu-btns{display:flex;gap:6px;}
+  .kifu-btns button{background:var(--panel);color:var(--text);border:1px solid #5a4630;
+    border-radius:7px;padding:3px 9px;font-size:12px;font-family:inherit;cursor:pointer;}
+  .board.reviewing{outline:3px solid var(--accent);outline-offset:2px;}
+  .kifu-dialog{max-width:360px;}
+  #kifuTextArea{width:100%;height:230px;box-sizing:border-box;resize:vertical;
+    background:#1c1712;color:var(--text);border:1px solid #5a4630;border-radius:8px;
+    padding:8px;font-family:"Hiragino Mincho ProN",serif;font-size:14px;line-height:1.6;margin-bottom:14px;}
+
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;
+    align-items:center;justify-content:center;z-index:50;}
+  .overlay.on{display:flex;}
+  .dialog{background:var(--panel);border:2px solid var(--accent);border-radius:14px;
+    padding:20px 24px;text-align:center;max-width:300px;}
+  .dialog p{margin:0 0 16px;font-size:16px;}
+  .dialog .btns{display:flex;gap:12px;justify-content:center;}
+  .dialog button{padding:10px 18px;font-size:15px;border-radius:10px;border:none;
+    cursor:pointer;font-family:inherit;font-weight:700;}
+  .dialog .yes{background:var(--accent);color:#241a12;}
+  .dialog .no{background:#544;color:#fff;}
+
+  .result{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;
+    align-items:center;justify-content:center;z-index:60;flex-direction:column;gap:16px;}
+  .result.on{display:flex;}
+  .result h2{font-size:36px;color:var(--accent);margin:0;text-shadow:0 2px 6px #000;text-align:center;}
+  .result .rbtns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+  .result button{padding:12px 22px;font-size:16px;border-radius:12px;border:none;
+    background:var(--accent);color:#241a12;cursor:pointer;font-weight:700;font-family:inherit;}
+  .result button.sub{background:#544;color:#fff;}
+
+  .stats-line{margin-top:8px;text-align:center;font-size:13px;color:#c9b48c;
+    background:var(--panel);border:1px solid #5a4630;border-radius:8px;padding:6px 8px;}
+  .stats-line b{color:var(--accent);font-family:sans-serif;font-size:15px;}
+  .stats-line button{background:var(--bg);color:var(--text);border:1px solid #5a4630;border-radius:6px;
+    padding:2px 8px;font-size:11px;font-family:inherit;cursor:pointer;margin-left:6px;}
+  .hint{text-align:center;font-size:12px;color:#a99;margin-top:10px;line-height:1.6;}
+  #tsumeInfo{font-size:13px;color:var(--accent);}
+
+  /* 指導モード */
+  .advice-panel{margin-top:8px;background:var(--panel);
+    border:2px solid var(--accent);border-radius:12px;padding:10px 12px;}
+  .advice-panel .ah{font-size:13px;color:var(--accent);margin-bottom:8px;
+    display:flex;justify-content:space-between;align-items:center;}
+  .advice-panel .ah .x{cursor:pointer;color:var(--text);opacity:.7;font-size:18px;line-height:1;padding:0 4px;}
+  #adviceList{display:flex;flex-direction:column;gap:8px;}
+  .advice-btn{display:flex;align-items:center;gap:10px;
+    background:var(--bg);border:1px solid var(--accent);color:var(--text);
+    padding:10px 12px;border-radius:10px;font-family:inherit;font-size:16px;cursor:pointer;text-align:left;}
+  .advice-btn:active{transform:translateY(1px);}
+  .advice-btn.best{border-color:var(--accent);background:rgba(216,162,74,.18);}
+  .advice-btn .rk{background:var(--accent);color:var(--bg);width:24px;height:24px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-family:sans-serif;font-size:14px;flex:0 0 auto;}
+  .advice-btn .mv{flex:1;font-weight:700;}
+  .advice-btn .ev{font-size:12px;opacity:.8;}
+  .advice-note{background:var(--bg);border:1px solid var(--accent);border-radius:10px;
+    padding:10px 12px;font-size:14px;line-height:1.7;color:var(--text);}
+  .advice-note b{color:var(--accent);}
+  .advmark{position:absolute;top:2px;right:2px;z-index:3;background:var(--accent);color:#241a12;
+    width:20px;height:20px;border-radius:50%;font-size:13px;font-weight:700;font-family:sans-serif;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.5);}
+</style>
+
+<div id="app">
+  <h1>本 将 棋</h1>
+  <div id="layout">
+  <div class="col-menu">
+  <div class="toolbar">
+    <div class="main-row">
+      <label>モード
+        <select id="modeSel">
+          <option value="play" selected>対局</option>
+          <option value="teach">指導</option>
+          <option value="tsume">詰将棋</option>
+        </select>
+      </label>
+      <button id="newBtn">新規対局</button>
+      <button id="undoBtn">待った</button>
+      <button id="adviceBtn" class="hidden">指導</button>
+      <button id="declareBtn" class="hidden">入玉宣言</button>
+      <button id="settingsToggle">⚙ 設定</button>
+    </div>
+    <span id="tsumeControls" class="hidden">
+      <label>手数
+        <select id="tsumeFilter">
+          <option value="all" selected>全部</option>
+          <option value="3">3手</option>
+          <option value="5">5手</option>
+          <option value="7">7手</option>
+          <option value="9">9手</option>
+        </select>
+      </label>
+      <button id="tsumePrev">◀前</button>
+      <button id="tsumeNext">次▶</button>
+      <button id="tsumeHint">ヒント</button>
+      <button id="tsumeSolBtn">解答</button>
+      <button id="tsumeReset">やり直し</button>
+    </span>
+    <div id="settingsPanel" class="settings-panel hidden">
+      <label>強さ
+        <select id="levelSel">
+          <option value="1">弱い</option>
+          <option value="2" selected>普通</option>
+          <option value="3">強い</option>
+        </select>
+      </label>
+      <label id="sideWrap">手番
+        <select id="sideSel">
+          <option value="0" selected>先手(下)</option>
+          <option value="1">後手(上)</option>
+        </select>
+      </label>
+      <label id="handiWrap">手合
+        <select id="handicapSel">
+          <option value="none" selected>平手</option>
+          <option value="kyou">香落ち</option>
+          <option value="kaku">角落ち</option>
+          <option value="hisha">飛車落ち</option>
+          <option value="hikyou">飛香落ち</option>
+          <option value="nimai">二枚落ち</option>
+          <option value="yonmai">四枚落ち</option>
+          <option value="rokumai">六枚落ち</option>
+          <option value="hachimai">八枚落ち</option>
+        </select>
+      </label>
+      <label id="clockWrap">時計
+        <select id="clockSel">
+          <option value="off" selected>なし</option>
+          <option value="3">3分切れ負け</option>
+          <option value="10">10分切れ負け</option>
+          <option value="10-30">10分+秒読30</option>
+          <option value="0-30">30秒将棋</option>
+        </select>
+      </label>
+      <label>盤
+        <select id="themeSel">
+          <option value="default" selected>標準</option>
+          <option value="light">明るい</option>
+          <option value="walnut">濃い木目</option>
+          <option value="night">夜</option>
+          <option value="washi">和紙</option>
+          <option value="ai">藍</option>
+        </select>
+      </label>
+      <button id="soundBtn" title="効果音 オン/オフ">🔊</button>
+      <button id="suspendBtn">中断</button>
+      <button id="resumeBtn">再開</button>
+    </div>
+  </div>
+  <div id="tsumeInfo" class="hidden"></div>
+
+  <div class="advice-panel hidden" id="advicePanel">
+    <div class="ah"><span id="adviceTitle">次の一手 候補（上ほど有力）</span><span class="x" id="adviceClose">×</span></div>
+    <div id="adviceList"></div>
+  </div>
+  </div><!-- /col-menu -->
+
+  <div class="col-game">
+  <div class="stand top" id="standGote">
+    <div class="stand-label"><span>後手（上）持ち駒</span><span class="lbl-right"><span id="clockGote" class="clock hidden"></span><span id="goteName">△ CPU</span></span></div>
+  </div>
+
+  <div class="board" id="board"></div>
+
+  <div class="status" id="status">対局開始</div>
+
+  <div class="stand bottom" id="standSente">
+    <div class="stand-label"><span>先手（下）持ち駒</span><span class="lbl-right"><span id="clockSente" class="clock hidden"></span><span id="senteName">▲ あなた</span></span></div>
+  </div>
+  </div><!-- /col-game -->
+
+  <div class="col-info">
+  <div class="kifu-wrap">
+    <div class="kifu-head"><span>棋譜（クリックでその局面へ）</span>
+      <span class="kifu-btns">
+        <button id="liveBtn" class="hidden">現局面▶</button>
+        <button id="exportBtn">保存</button>
+        <button id="importBtn">読込</button>
+      </span>
+    </div>
+    <div class="kifu" id="kifu"></div>
+  </div>
+  <div id="statsLine" class="stats-line"></div>
+
+  <div class="hint" id="hintText">駒をタップ→行き先をタップで移動。持ち駒はタップして盤上へ打てます。</div>
+  </div><!-- /col-info -->
+  </div><!-- /layout -->
+</div>
+
+<div class="overlay" id="promoOverlay">
+  <div class="dialog">
+    <p id="promoText">成りますか？</p>
+    <div class="btns">
+      <button class="yes" id="promoYes">成る</button>
+      <button class="no" id="promoNo">不成</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="kifuOverlay">
+  <div class="dialog kifu-dialog">
+    <p id="kifuDlgTitle">棋譜（テキスト）</p>
+    <textarea id="kifuTextArea"></textarea>
+    <div class="btns">
+      <button class="yes" id="kifuCopy">コピー</button>
+      <button class="yes" id="kifuLoad">読み込む</button>
+      <button class="no" id="kifuCloseBtn">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div class="result" id="result">
+  <h2 id="resultText">勝ち！</h2>
+  <div class="rbtns" id="resultBtns"></div>
+</div>
+
+<script>
+"use strict";
+/* ================= 定数・駒定義 ================= */
+const KANJI = {
+  K:{n:'玉',p:null}, R:{n:'飛',p:'龍'}, B:{n:'角',p:'馬'},
+  G:{n:'金',p:null}, S:{n:'銀',p:'成銀'}, N:{n:'桂',p:'成桂'},
+  L:{n:'香',p:'成香'}, P:{n:'歩',p:'と'}
+};
+const KING_LABEL = {0:'王',1:'玉'};
+const VALUE = { P:1, L:4, N:4, S:6, G:6, B:9, R:11, K:1000, Pp:7, Lp:6, Np:6, Sp:6, Bp:12, Rp:14 };
+const MATE = 1000000;
+function pieceValue(pc){
+  if(pc.t==='K') return VALUE.K;
+  if(pc.p){
+    if(pc.t==='P')return VALUE.Pp; if(pc.t==='L')return VALUE.Lp;
+    if(pc.t==='N')return VALUE.Np; if(pc.t==='S')return VALUE.Sp;
+    if(pc.t==='B')return VALUE.Bp; if(pc.t==='R')return VALUE.Rp;
+  }
+  return VALUE[pc.t];
+}
+function handValue(t){ return VALUE[t]+1; }
+
+const STEP = {
+  G:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,0]],
+  S:[[-1,-1],[-1,0],[-1,1],[1,-1],[1,1]],
+  K:[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]],
+  N:[[-2,-1],[-2,1]], P:[[-1,0]]
+};
+const GOLD_STEP = STEP.G;
+const SLIDE = { R:[[-1,0],[1,0],[0,-1],[0,1]], B:[[-1,-1],[-1,1],[1,-1],[1,1]], L:[[-1,0]] };
+
+function initBoard(){
+  const b = Array.from({length:9},()=>Array(9).fill(null));
+  const back = ['L','N','S','G','K','G','S','N','L'];
+  for(let c=0;c<9;c++){
+    b[0][c] = {t:back[c], o:1, p:false};
+    b[2][c] = {t:'P', o:1, p:false};
+    b[8][c] = {t:back[c], o:0, p:false};
+    b[6][c] = {t:'P', o:0, p:false};
+  }
+  b[7][7] = {t:'R', o:0, p:false};  // 先手 飛車 (2八)
+  b[7][1] = {t:'B', o:0, p:false};  // 先手 角行 (8八)
+  b[1][1] = {t:'R', o:1, p:false};  // 後手 飛車
+  b[1][7] = {t:'B', o:1, p:false};  // 後手 角行
+  return b;
+}
+
+const G = {
+  board:null, hands:[{},{}], turn:0, human:0, level:2,
+  history:[], last:null, over:false, busy:false,
+  mode:'play', kifu:[], kifuMoves:[], lastKifuSq:null,
+  tsumeIndex:0, tsumeMoves:0, handicap:'none', clock:null, posLog:[],
+};
+
+function cloneState(){
+  return {
+    board: G.board.map(r=>r.map(c=>c?{t:c.t,o:c.o,p:c.p}:null)),
+    hands: [ {...G.hands[0]}, {...G.hands[1]} ],
+    turn: G.turn, last: G.last?{...G.last}:null,
+    kifuLen: G.kifu.length, lastKifuSq: G.lastKifuSq?[...G.lastKifuSq]:null,
+    tsumeMoves: G.tsumeMoves,
+  };
+}
+function restoreState(s){
+  G.board = s.board.map(r=>r.map(c=>c?{t:c.t,o:c.o,p:c.p}:null));
+  G.hands = [ {...s.hands[0]}, {...s.hands[1]} ];
+  G.turn = s.turn; G.last = s.last?{...s.last}:null;
+  G.kifu.length = s.kifuLen; G.kifuMoves.length = s.kifuLen;
+  G.lastKifuSq = s.lastKifuSq?[...s.lastKifuSq]:null;
+  G.tsumeMoves = s.tsumeMoves;
+}
+function quickClone(state){
+  return {
+    board: state.board.map(r=>r.map(c=>c?{t:c.t,o:c.o,p:c.p}:null)),
+    hands: [ {...state.hands[0]}, {...state.hands[1]} ],
+    turn: state.turn, last: state.last?{...state.last}:null,
+  };
+}
+
+/* ================= ルール ================= */
+function inZone(row,owner){ return owner===0 ? row<=2 : row>=6; }
+function lastRowFor(row,o){ return o===0 ? row===0 : row===8; }
+function mustPromote(pc,row){
+  if(pc.p) return false;
+  if(pc.t==='P'||pc.t==='L') return lastRowFor(row,pc.o);
+  if(pc.t==='N') return pc.o===0 ? row<=1 : row>=7;
+  return false;
+}
+function canPromote(pc,fr,tr){
+  if(pc.p) return false;
+  if(pc.t==='K'||pc.t==='G') return false;
+  return inZone(fr,pc.o) || inZone(tr,pc.o);
+}
+function pieceMoves(board, r, c){
+  const pc = board[r][c]; const res = []; const o = pc.o;
+  const dm = o===0 ? 1 : -1;
+  const add=(nr,nc)=>{
+    if(nr<0||nr>8||nc<0||nc>8) return false;
+    const t = board[nr][nc];
+    if(t && t.o===o) return false;
+    res.push([nr,nc]); return !t;
+  };
+  let stepList=null, slideList=null;
+  if(pc.p){
+    if(pc.t==='R'){ slideList=SLIDE.R; stepList=[[-1,-1],[-1,1],[1,-1],[1,1]]; }
+    else if(pc.t==='B'){ slideList=SLIDE.B; stepList=[[-1,0],[1,0],[0,-1],[0,1]]; }
+    else { stepList=GOLD_STEP; }
+  } else {
+    if(pc.t==='R'){ slideList=SLIDE.R; }
+    else if(pc.t==='B'){ slideList=SLIDE.B; }
+    else if(pc.t==='L'){ slideList=SLIDE.L; }
+    else { stepList=STEP[pc.t]; }
+  }
+  if(stepList){ for(const [dr,dc] of stepList) add(r+dr*dm, c+dc); }
+  if(slideList){ for(const [dr,dc] of slideList){ let nr=r,nc=c;
+    while(true){ nr+=dr*dm; nc+=dc; if(!add(nr,nc)) break; } } }
+  return res;
+}
+function findKing(board, o){
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const p=board[r][c]; if(p&&p.t==='K'&&p.o===o) return [r,c];
+  }
+  return null;
+}
+function inCheck(board, o){
+  const k = findKing(board,o); if(!k) return true;
+  const [kr,kc]=k;
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const p=board[r][c];
+    if(p && p.o!==o){
+      for(const [mr,mc] of pieceMoves(board,r,c)){ if(mr===kr&&mc===kc) return true; }
+    }
+  }
+  return false;
+}
+function pushMoveOpts(res, board, r, c, tr, tc){
+  const pc=board[r][c];
+  const forced=mustPromote(pc,tr);
+  const canP=canPromote(pc,r,tr);
+  if(forced){ res.push({fr:r,fc:c,tr,tc,promote:true,drop:false}); }
+  else if(canP){
+    res.push({fr:r,fc:c,tr,tc,promote:true,drop:false});
+    res.push({fr:r,fc:c,tr,tc,promote:false,drop:false});
+  } else { res.push({fr:r,fc:c,tr,tc,promote:false,drop:false}); }
+}
+function genMoves(state, o){
+  const board = state.board; const moves = [];
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const pc = board[r][c]; if(!pc || pc.o!==o) continue;
+    for(const [tr,tc] of pieceMoves(board,r,c)) pushMoveOpts(moves,board,r,c,tr,tc);
+  }
+  const hand = state.hands[o];
+  const types = Object.keys(hand).filter(t=>hand[t]>0);
+  if(types.length){
+    const pawnCol = Array(9).fill(false);
+    for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+      const p=board[r][c]; if(p&&p.o===o&&p.t==='P'&&!p.p) pawnCol[c]=true;
+    }
+    for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+      if(board[r][c]) continue;
+      for(const t of types){
+        if((t==='P'||t==='L') && lastRowFor(r,o)) continue;
+        if(t==='N' && (o===0? r<=1 : r>=7)) continue;
+        if(t==='P' && pawnCol[c]) continue;
+        moves.push({fr:-1,fc:t,tr:r,tc:c,promote:false,drop:true});
+      }
+    }
+  }
+  return moves;
+}
+function genCaptures(state, o){
+  const board=state.board; const res=[];
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const pc=board[r][c]; if(!pc||pc.o!==o) continue;
+    for(const [tr,tc] of pieceMoves(board,r,c)){ if(board[tr][tc]) pushMoveOpts(res,board,r,c,tr,tc); }
+  }
+  return res;
+}
+function applyMove(state, mv){
+  const board = state.board; const o = state.turn;
+  if(mv.drop){
+    board[mv.tr][mv.tc] = {t:mv.fc, o, p:false};
+    state.hands[o][mv.fc]--;
+  } else {
+    const pc = board[mv.fr][mv.fc];
+    const cap = board[mv.tr][mv.tc];
+    if(cap){ state.hands[o][cap.t] = (state.hands[o][cap.t]||0)+1; }
+    board[mv.tr][mv.tc] = {t:pc.t, o:pc.o, p: pc.p || mv.promote};
+    board[mv.fr][mv.fc] = null;
+  }
+  state.turn = o^1;
+  state.last = {fr:mv.fr,fc:mv.fc,tr:mv.tr,tc:mv.tc,drop:mv.drop};
+}
+function capturesKing(state, mv){
+  if(mv.drop) return false;
+  const t=state.board[mv.tr][mv.tc];
+  return !!(t && t.t==='K');
+}
+function legalMoves(state, o){
+  const res=[];
+  for(const mv of genMoves(state,o)){
+    if(capturesKing(state,mv)) continue; // 玉は取れない
+    const s = quickClone(state); s.turn=o; applyMove(s, mv);
+    if(!inCheck(s.board, o)){
+      if(mv.drop && mv.fc==='P' && isDropPawnMate(state, mv, o)) continue;
+      res.push(mv);
+    }
+  }
+  return res;
+}
+function legalMovesNoDropMate(state, o){
+  const res=[];
+  for(const mv of genMoves(state,o)){
+    if(capturesKing(state,mv)) continue;
+    const s = quickClone(state); s.turn=o; applyMove(s, mv);
+    if(!inCheck(s.board, o)) res.push(mv);
+  }
+  return res;
+}
+function isDropPawnMate(state, mv, o){
+  const s = quickClone(state); s.turn=o; applyMove(s, mv);
+  const opp = o^1;
+  if(!inCheck(s.board, opp)) return false;
+  return legalMovesNoDropMate(s, opp).length===0;
+}
+
+/* ================= 評価 ================= */
+function positionalBonus(pc, r, c){
+  let b=0; const centerC = 4 - Math.abs(c-4);
+  if(pc.t==='P' && !pc.p){ b += pc.o===0 ? (8-r)*2 : r*2; }
+  if(pc.t==='S'||pc.t==='G'){ b += centerC; }
+  if(pc.t==='K'){ b += pc.o===0 ? r : (8-r); b += (4-Math.abs(c-4)); }
+  return b;
+}
+const G_HANDTYPES = {P:1,L:1,N:1,S:1,G:1,B:1,R:1};
+function evaluate(state){
+  const b=state.board; let score=0; const kp=[null,null];
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const p=b[r][c]; if(!p) continue;
+    if(p.t==='K') kp[p.o]=[r,c];
+    const v = pieceValue(p)*100 + positionalBonus(p,r,c);
+    score += p.o===0 ? v : -v;
+  }
+  for(const t in G_HANDTYPES){
+    score += (state.hands[0][t]||0)*handValue(t)*100;
+    score -= (state.hands[1][t]||0)*handValue(t)*100;
+  }
+  for(let o=0;o<2;o++){
+    if(!kp[o]) continue;
+    const [kr,kc]=kp[o]; let def=0, shelter=0;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      if(!dr&&!dc)continue; const nr=kr+dr,nc=kc+dc;
+      if(nr<0||nr>8||nc<0||nc>8)continue;
+      const q=b[nr][nc];
+      if(q&&q.o===o){ if(q.t!=='P') def++; else shelter++; } // 金銀=守り、歩=壁
+    }
+    // 玉が端(左右)に寄っているほうが囲いやすい＝中央玉に軽いペナルティ
+    const sideBonus = Math.abs(kc-4);      // 0(中央)〜4(端)
+    // 玉の前進を強くペナルティ（自陣を離れるほど危険）
+    const homeDist = o===0 ? (8-kr) : kr;          // 自陣最深部からの距離
+    const advance  = o===0 ? Math.max(0,6-kr) : Math.max(0,kr-2); // 自陣3段を出た分
+    const term = def*18 + shelter*6 + sideBonus*4 - homeDist*4 - advance*70;
+    score += (o===0? 1:-1)*term;
+  }
+  return score;
+}
+function scoreMove(board,m){
+  let s=0;
+  if(m.drop){ s=1; }
+  else { const cap=board[m.tr][m.tc];
+    if(cap) s += pieceValue(cap)*10 - pieceValue(board[m.fr][m.fc]);
+    if(m.promote) s += 40; }
+  return s;
+}
+function orderMoves(board, moves){
+  return moves.map(m=>({m,s:scoreMove(board,m)})).sort((a,b)=>b.s-a.s).map(x=>x.m);
+}
+
+/* ================= 探索（反復深化 + 静止探索） ================= */
+let searchDeadline=0, nodeCount=0, timedOut=false;
+function timeUp(){ if((++nodeCount & 1023)===0){ if(performance.now()>searchDeadline) timedOut=true; } return timedOut; }
+
+function quiesce(state, alpha, beta){
+  const o=state.turn;
+  let stand = o===0 ? evaluate(state) : -evaluate(state);
+  if(stand>=beta) return beta;
+  if(stand>alpha) alpha=stand;
+  const caps = orderMoves(state.board, genCaptures(state,o));
+  for(const mv of caps){
+    if(timeUp()) break;
+    const s=quickClone(state); applyMove(s,mv);
+    const val = -quiesce(s, -beta, -alpha);
+    if(val>=beta) return beta;
+    if(val>alpha) alpha=val;
+  }
+  return alpha;
+}
+let TT=new Map();                       // 置換表（同一局面の再探索を省く）
+function movesEq2(a,b){ return a&&b&&a.drop===b.drop&&a.tr===b.tr&&a.tc===b.tc&&a.promote===b.promote&&a.fr===b.fr&&a.fc===b.fc; }
+function negamax(state, depth, alpha, beta, ply){
+  if(timedOut) return 0;
+  const o=state.turn;
+  if(depth<=0) return quiesce(state, alpha, beta);
+  const alphaOrig=alpha;
+  const key = posKeyOf(state);
+  const e = TT.get(key);
+  if(e && e.depth>=depth){
+    if(e.flag===0) return e.value;                       // 確定値
+    if(e.flag===1 && e.value>alpha){ alpha=e.value; }     // 下限
+    if(e.flag===2 && e.value<beta){ beta=e.value; }       // 上限
+    if(alpha>=beta) return e.value;
+  }
+  let moves = orderMoves(state.board, genMoves(state,o));
+  if(moves.length===0) return -(MATE - ply);
+  if(e && e.move){                                        // 前回の最善手を先頭に
+    const i=moves.findIndex(m=>movesEq2(m,e.move));
+    if(i>0){ const [mm]=moves.splice(i,1); moves.unshift(mm); }
+  }
+  let best=-Infinity, bestMove=null, moved=false;
+  for(const mv of moves){
+    if(timeUp()) break;
+    const s=quickClone(state); applyMove(s,mv);
+    const val = -negamax(s, depth-1, -beta, -alpha, ply+1);
+    moved=true;
+    if(val>best){ best=val; bestMove=mv; }
+    if(best>alpha) alpha=best;
+    if(alpha>=beta) break;
+  }
+  if(!moved) return -(MATE - ply);
+  if(!timedOut){
+    const flag = best<=alphaOrig ? 2 : (best>=beta ? 1 : 0);
+    if(TT.size>600000) TT.clear();                        // メモリ上限
+    TT.set(key, {depth, value:best, flag, move:bestMove});
+  }
+  return best;
+}
+/* ===== 序盤定跡ブック（数手だけ・自然で多彩に） ===== */
+const OPENING_BOOK={};
+function buildBook(){
+  function keyAfter(seq){
+    let st={board:initBoard(),hands:[{},{}],turn:0,last:null};
+    for(const m of seq){ applyMove(st,{fr:m[0],fc:m[1],tr:m[2],tc:m[3],promote:false,drop:false}); }
+    return posKeyOf(st);
+  }
+  function reg(seq, nexts){ OPENING_BOOK[keyAfter(seq)] = nexts.map(m=>({fr:m[0],fc:m[1],tr:m[2],tc:m[3]})); }
+  const P76=[6,2,5,2], P26=[6,7,5,7], P56=[6,4,5,4];   // 先手の代表的初手
+  const p34=[2,6,3,6], p84=[2,1,3,1], p54=[2,4,3,4];   // 後手の代表的応手
+  reg([], [P76,P26,P56]);                              // 初手（先手）
+  reg([P76], [p34,p84]);                               // ☗7六歩に対する後手
+  reg([P26], [p34,p84]);
+  reg([P56], [p34,p54]);
+  reg([P76,p34], [P26,P56,[8,6,7,5]]);                 // 後の先手（26歩/56歩/6八銀）
+  reg([P26,p84], [P76,[5,7,4,7]]);                     // 2五歩/7六歩
+  reg([P76,p84], [P26,[8,6,7,5]]);                     // 2六歩/6八銀
+  reg([P56,p34], [[5,4,4,4],P76]);                     // 5五歩/7六歩
+  reg([P76,p34,P26], [p84,[2,3,3,3]]);                 // 後手：8四歩/4四歩
+  reg([P26,p34], [P76,[5,7,4,7]]);
+}
+buildBook();
+function bookMove(){
+  if(G.mode==='tsume' || (G.handicap&&G.handicap!=='none') || G.kifu.length>=6) return null;
+  const list=OPENING_BOOK[positionKey()];
+  if(!list||!list.length) return null;
+  const legal=legalMoves({board:G.board,hands:G.hands,turn:G.turn,last:G.last}, G.turn);
+  const cands=list.map(m=>legal.find(x=>!x.drop&&x.fr===m.fr&&x.fc===m.fc&&x.tr===m.tr&&x.tc===m.tc)).filter(Boolean);
+  return cands.length ? cands[Math.floor(Math.random()*cands.length)] : null;
+}
+
+function chooseCpuMove(){
+  const bm=bookMove(); if(bm) return bm;   // 序盤は定跡から
+  const o = G.turn;
+  const root = quickClone({board:G.board,hands:G.hands,turn:o,last:G.last});
+  let rootMoves = legalMoves(root, o);
+  if(rootMoves.length===0) return null;
+  // 対局に変化を出すため軽くシャッフル
+  for(let i=rootMoves.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [rootMoves[i],rootMoves[j]]=[rootMoves[j],rootMoves[i]]; }
+  const limits={1:400,2:1600,3:3500};
+  const maxD={1:2,2:5,3:8};              // 置換表で深く読めるので上限を引き上げ
+  TT.clear();
+  searchDeadline = performance.now()+(limits[G.level]||1600);
+  let bestMove=rootMoves[0];
+  for(let d=1; d<=(maxD[G.level]||4); d++){
+    timedOut=false; nodeCount=0;
+    let localBest=-Infinity, localMove=null, alpha=-Infinity;
+    // 前回最善を先頭に
+    const ordered = orderMoves(root.board, rootMoves);
+    ordered.sort((a,b)=> (a===bestMove?-1:0)-(b===bestMove?-1:0));
+    for(const mv of ordered){
+      if(timedOut) break;
+      const s=quickClone(root); applyMove(s,mv);
+      const val = -negamax(s, d-1, -Infinity, -alpha, 1);
+      if(timedOut) break;
+      if(val>localBest){ localBest=val; localMove=mv; }
+      if(val>alpha) alpha=val;
+    }
+    if(!timedOut && localMove) bestMove=localMove;
+    if(timedOut) break;
+    if(localBest>MATE-1000){ bestMove=localMove; break; }
+  }
+  return bestMove;
+}
+
+/* ================= 詰将棋ソルバ ================= */
+function solveTsume(state, depth){ // 攻方手番。詰ます初手を返す（無ければnull）
+  const atk=state.turn;
+  for(const mv of legalMoves(state,atk)){
+    const s=quickClone(state); applyMove(s,mv);
+    if(!inCheck(s.board, atk^1)) continue; // 王手のみ
+    if(defenderMated(s, depth-1)) return mv;
+  }
+  return null;
+}
+function defenderMated(state, depth){ // 受方手番。詰めば true
+  const def=state.turn;
+  const moves=legalMoves(state,def);
+  if(moves.length===0) return true;
+  if(depth<=0) return false;
+  for(const mv of moves){
+    const s=quickClone(state); applyMove(s,mv);
+    if(!solveTsume(s, depth-1)) return false;
+  }
+  return true;
+}
+
+/* ================= 詰将棋 問題 ================= */
+function emptyB(){ return Array.from({length:9},()=>Array(9).fill(null)); }
+function put(b,r,c,t,o,p){ b[r][c]={t,o,p:!!p}; }
+// 詰将棋データ（ランダム生成＋詰将棋ソルバで自動検証済み：
+//   ・開始局面で王手なし  ・ちょうどN手詰（それより短い詰みが存在しない））
+// pc: [row, col, 種類, 手番(0=先手/1=後手), 成り] ／ h0=先手持駒, h1=後手持駒
+const TSUME_RAW = [{"n":3,"pc":[[0,5,"K",1,0],[0,6,"S",1,0],[2,2,"R",0,0],[2,5,"N",1,0],[2,8,"B",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":3,"pc":[[0,0,"N",1,0],[0,1,"S",1,0],[1,1,"K",1,0],[3,1,"S",0,0],[4,0,"G",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":3,"pc":[[0,8,"P",1,0],[1,6,"K",1,0],[2,4,"R",0,0],[3,4,"S",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":3,"pc":[[1,8,"K",1,0],[2,6,"L",0,0],[3,7,"L",0,0],[8,8,"K",0,0]],"h0":{"G":1},"h1":{}},{"n":3,"pc":[[0,3,"P",1,0],[0,5,"K",1,0],[2,2,"R",0,0],[8,8,"K",0,0]],"h0":{"G":1},"h1":{}},{"n":3,"pc":[[0,5,"N",1,0],[1,7,"K",1,0],[4,4,"N",0,0],[4,8,"N",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":3,"pc":[[0,2,"N",1,0],[2,0,"K",1,0],[4,1,"R",0,0],[4,3,"L",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":3,"pc":[[0,7,"B",0,0],[1,5,"K",1,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":3,"pc":[[0,8,"K",1,0],[1,5,"B",0,0],[1,6,"B",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":3,"pc":[[1,1,"R",0,0],[1,3,"S",0,0],[2,0,"K",1,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":5,"pc":[[1,1,"K",1,0],[2,0,"R",0,0],[4,3,"N",0,0],[8,8,"K",0,0]],"h0":{"S":1},"h1":{}},{"n":5,"pc":[[1,1,"K",1,0],[2,3,"R",0,0],[3,4,"N",0,0],[8,8,"K",0,0]],"h0":{"G":1},"h1":{}},{"n":5,"pc":[[0,6,"R",0,0],[1,4,"K",1,0],[2,2,"B",0,0],[3,4,"P",1,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":5,"pc":[[0,1,"K",1,0],[2,2,"L",0,0],[3,2,"S",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":5,"pc":[[0,3,"P",1,0],[1,1,"B",0,0],[1,2,"K",1,0],[2,3,"G",1,0],[3,3,"B",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":5,"pc":[[1,3,"R",0,0],[2,0,"K",1,0],[5,1,"G",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":5,"pc":[[1,0,"K",1,0],[2,2,"R",0,0],[8,8,"K",0,0]],"h0":{"G":1},"h1":{}},{"n":5,"pc":[[1,1,"P",1,0],[2,0,"K",1,0],[3,1,"R",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":5,"pc":[[0,8,"K",1,0],[1,8,"S",1,0],[3,6,"B",0,0],[3,7,"S",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":5,"pc":[[0,3,"K",1,0],[1,3,"N",1,0],[2,1,"R",0,0],[2,2,"B",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":7,"pc":[[0,7,"P",1,0],[1,6,"P",1,0],[1,7,"K",1,0],[3,6,"G",0,0],[3,8,"G",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":7,"pc":[[0,2,"P",1,0],[2,0,"K",1,0],[3,3,"R",0,0],[4,2,"N",1,0],[5,2,"L",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":7,"pc":[[1,6,"S",0,0],[1,8,"K",1,0],[2,7,"G",1,0],[3,5,"B",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":7,"pc":[[0,1,"K",1,0],[2,0,"R",0,0],[2,1,"P",1,0],[2,4,"N",0,0],[8,8,"K",0,0]],"h0":{"S":1},"h1":{}},{"n":7,"pc":[[0,7,"K",1,0],[2,7,"P",1,0],[3,6,"B",0,0],[3,7,"S",0,0],[8,8,"K",0,0]],"h0":{"S":2},"h1":{}},{"n":7,"pc":[[0,0,"K",1,0],[0,3,"G",0,0],[1,2,"G",1,0],[1,3,"R",0,0],[2,0,"N",1,0],[8,8,"K",0,0]],"h0":{"G":1},"h1":{}},{"n":7,"pc":[[1,2,"R",0,0],[1,3,"P",1,0],[1,4,"K",1,0],[2,5,"G",1,0],[3,3,"P",1,0],[3,6,"R",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":7,"pc":[[2,8,"K",1,0],[3,8,"S",1,0],[4,7,"S",1,0],[5,6,"R",0,0],[8,8,"K",0,0]],"h0":{"S":2},"h1":{}},{"n":7,"pc":[[0,6,"G",1,0],[0,8,"K",1,0],[1,6,"N",0,0],[2,6,"P",1,0],[2,8,"P",1,0],[3,5,"B",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":7,"pc":[[0,0,"K",1,0],[0,1,"S",1,0],[0,2,"N",1,0],[1,0,"S",1,0],[1,3,"B",0,0],[2,3,"R",0,0],[8,8,"K",0,0]],"h0":{"G":1},"h1":{}},{"n":9,"pc":[[0,8,"K",1,0],[1,5,"R",0,0],[1,6,"P",1,0],[2,6,"S",1,0],[2,8,"S",1,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":9,"pc":[[0,1,"P",1,0],[0,3,"B",0,0],[1,0,"K",1,0],[1,1,"G",1,0],[3,0,"B",0,0],[3,1,"N",1,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":9,"pc":[[0,0,"S",1,0],[0,1,"K",1,0],[0,2,"P",1,0],[0,4,"B",0,0],[2,3,"P",1,0],[3,3,"B",0,0],[8,8,"K",0,0]],"h0":{"G":1},"h1":{}},{"n":9,"pc":[[0,6,"S",1,0],[0,7,"P",1,0],[0,8,"K",1,0],[1,8,"B",0,0],[2,8,"N",1,0],[3,6,"R",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":9,"pc":[[0,2,"K",1,0],[0,3,"P",1,0],[0,4,"S",1,0],[1,5,"G",0,0],[2,1,"P",1,0],[3,4,"R",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":9,"pc":[[0,1,"P",1,0],[1,0,"K",1,0],[2,2,"P",1,0],[3,1,"N",1,0],[3,2,"R",0,0],[4,2,"B",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":9,"pc":[[0,1,"K",1,0],[1,0,"N",1,0],[1,2,"P",1,0],[1,3,"P",1,0],[2,3,"R",0,0],[3,4,"G",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":9,"pc":[[0,1,"P",1,0],[0,2,"K",1,0],[0,3,"B",0,0],[1,3,"S",1,0],[2,4,"S",1,0],[3,1,"G",0,0],[8,8,"K",0,0]],"h0":{"S":1},"h1":{}},{"n":9,"pc":[[0,6,"K",1,0],[1,4,"G",1,0],[1,7,"G",1,0],[3,5,"R",0,0],[3,7,"R",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":9,"pc":[[0,4,"B",0,0],[0,7,"K",1,0],[1,5,"N",1,0],[1,7,"P",1,0],[2,4,"R",0,0],[2,8,"G",1,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":5,"pc":[[0,5,"B",0,0],[0,8,"G",1,0],[1,5,"G",0,0],[2,6,"N",1,0],[2,8,"K",1,0],[3,7,"S",1,0],[8,8,"K",0,0]],"h0":{"S":1},"h1":{}},{"n":5,"pc":[[0,3,"K",1,0],[2,0,"R",0,0],[2,3,"N",1,0],[3,1,"B",0,0],[8,8,"K",0,0]],"h0":{"S":1},"h1":{}},{"n":5,"pc":[[0,8,"K",1,0],[1,8,"N",1,0],[2,8,"P",1,0],[3,5,"G",0,0],[3,6,"S",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":5,"pc":[[0,5,"P",1,0],[0,7,"K",1,0],[1,5,"N",1,0],[2,6,"G",1,0],[3,6,"S",0,0],[3,7,"G",0,0],[8,8,"K",0,0]],"h0":{"S":2},"h1":{}},{"n":5,"pc":[[1,4,"G",1,0],[1,5,"K",1,0],[3,2,"B",0,0],[3,5,"B",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":5,"pc":[[0,1,"N",1,0],[0,2,"S",1,0],[2,0,"K",1,0],[3,2,"P",1,0],[5,0,"B",0,0],[5,1,"L",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":5,"pc":[[0,5,"B",0,0],[0,6,"G",1,0],[0,8,"K",1,0],[3,7,"R",0,0],[8,8,"K",0,0]],"h0":{"G":1},"h1":{}},{"n":5,"pc":[[0,4,"K",1,0],[1,5,"S",1,0],[2,3,"P",1,0],[2,6,"R",0,0],[2,7,"R",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":5,"pc":[[0,1,"P",1,0],[0,2,"K",1,0],[0,3,"N",1,0],[2,4,"N",1,0],[3,1,"B",0,0],[3,4,"N",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":5,"pc":[[0,0,"G",1,0],[0,2,"K",1,0],[2,0,"N",1,0],[3,1,"R",0,0],[3,5,"R",0,0],[8,8,"K",0,0]],"h0":{"G":1},"h1":{}},{"n":7,"pc":[[1,8,"K",1,0],[2,6,"G",1,0],[3,6,"N",1,0],[3,7,"B",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":7,"pc":[[1,5,"G",1,0],[1,6,"K",1,0],[2,4,"R",0,0],[3,5,"S",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":7,"pc":[[1,0,"K",1,0],[2,3,"S",0,0],[3,0,"P",1,0],[3,2,"G",1,0],[3,3,"G",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":7,"pc":[[0,0,"K",1,0],[0,1,"P",1,0],[0,3,"S",0,0],[3,1,"B",0,0],[8,8,"K",0,0]],"h0":{"G":1},"h1":{}},{"n":7,"pc":[[0,5,"K",1,0],[1,4,"G",1,0],[2,4,"P",1,0],[3,4,"G",0,0],[3,5,"N",0,0],[8,8,"K",0,0]],"h0":{"G":2},"h1":{}},{"n":7,"pc":[[0,5,"B",0,0],[0,8,"K",1,0],[1,6,"P",1,0],[2,5,"B",0,0],[2,7,"P",1,0],[2,8,"P",1,0],[8,8,"K",0,0]],"h0":{"S":2},"h1":{}},{"n":7,"pc":[[0,4,"K",1,0],[1,1,"R",0,0],[1,7,"N",0,0],[2,4,"P",1,0],[2,6,"P",1,0],[8,8,"K",0,0]],"h0":{"S":2},"h1":{}},{"n":7,"pc":[[0,2,"G",1,0],[0,4,"K",1,0],[0,5,"S",1,0],[2,3,"N",1,0],[2,5,"R",0,0],[2,7,"G",0,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}},{"n":7,"pc":[[0,5,"B",0,0],[0,7,"S",1,0],[0,8,"K",1,0],[1,5,"B",0,0],[1,8,"N",1,0],[2,8,"G",1,0],[8,8,"K",0,0]],"h0":{"G":1},"h1":{}},{"n":7,"pc":[[0,5,"R",0,0],[0,7,"G",1,0],[1,7,"K",1,0],[1,8,"G",1,0],[2,4,"R",0,0],[3,7,"P",1,0],[8,8,"K",0,0]],"h0":{"G":1,"S":1},"h1":{}}];
+const MOVE_LABEL={3:'三手詰',5:'五手詰',7:'七手詰',9:'九手詰',11:'十一手詰'};
+const CIRCLED='①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
+const __tc={};
+const PROBLEMS = TSUME_RAW.slice().sort((a,b)=>a.n-b.n).map(d=>{
+  __tc[d.n]=(__tc[d.n]||0)+1;
+  const name = MOVE_LABEL[d.n] + ' ' + (CIRCLED.charAt(__tc[d.n]-1) || ('('+__tc[d.n]+')'));
+  return { name, moves:d.n, build(){ const b=emptyB();
+    for(let i=0;i<d.pc.length;i++){ const q=d.pc[i]; put(b,q[0],q[1],q[2],q[3],!!q[4]); }
+    return {board:b, hands:[Object.assign({},d.h0), Object.assign({},d.h1)]}; } };
+});
+
+/* ================= UI ================= */
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
+const standSente = document.getElementById('standSente');
+const standGote = document.getElementById('standGote');
+const kifuEl = document.getElementById('kifu');
+
+let selected = null, legalForSel = [];
+let adviceMarks = [];  // 指導モードの候補手マーカー
+
+/* ===== 効果音（Web Audioでコード生成／外部ファイル不要） ===== */
+let audioCtx=null, soundOn=true;
+function ensureAudio(){
+  if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ audioCtx=null; } }
+  if(audioCtx && audioCtx.state==='suspended'){ try{ audioCtx.resume(); }catch(e){} }
+  return audioCtx;
+}
+function playClack(kind){
+  if(!soundOn) return; const ctx=ensureAudio(); if(!ctx) return; const t=ctx.currentTime;
+  const dur=0.09, n=Math.floor(ctx.sampleRate*dur);
+  const buf=ctx.createBuffer(1,n,ctx.sampleRate); const d=buf.getChannelData(0);
+  for(let i=0;i<n;i++){ d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2.2); }   // 減衰ノイズ＝木の駒音
+  const src=ctx.createBufferSource(); src.buffer=buf;
+  const vary=0.9+Math.random()*0.2;   // 一手ごとに微妙に音程を変えて単調さを避ける
+  const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=(kind==='capture'?900:1400)*vary; bp.Q.value=0.9;
+  const g=ctx.createGain(); g.gain.value=kind==='capture'?0.55:0.4;
+  src.connect(bp); bp.connect(g); g.connect(ctx.destination); src.start(t); src.stop(t+dur);
+  const osc=ctx.createOscillator(); osc.type='triangle'; osc.frequency.value=(kind==='capture'?150:230)*vary;
+  const og=ctx.createGain(); og.gain.setValueAtTime(0.28,t); og.gain.exponentialRampToValueAtTime(0.001,t+0.1);
+  osc.connect(og); og.connect(ctx.destination); osc.start(t); osc.stop(t+0.11);
+}
+function playCheck(){
+  if(!soundOn) return; const ctx=ensureAudio(); if(!ctx) return; const t=ctx.currentTime;
+  [988,1319].forEach((f,i)=>{ const st=t+0.13+i*0.13; const o=ctx.createOscillator(); o.type='square'; o.frequency.value=f;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,st); g.gain.exponentialRampToValueAtTime(0.18,st+0.012); g.gain.exponentialRampToValueAtTime(0.0001,st+0.12);
+    o.connect(g); g.connect(ctx.destination); o.start(st); o.stop(st+0.13); });
+}
+function afterMoveFx(captured){ playClack(captured?'capture':'move'); if(inCheck(G.board,G.turn)) playCheck(); }
+function toggleSound(){ soundOn=!soundOn; const b=document.getElementById('soundBtn'); if(b) b.textContent=soundOn?'🔊':'🔇'; if(soundOn) ensureAudio(); }
+
+/* ===== 対局時計 ===== */
+const CLOCKS = { off:null, '3':{mainMin:3,byoSec:0}, '10':{mainMin:10,byoSec:0},
+  '10-30':{mainMin:10,byoSec:30}, '0-30':{mainMin:0,byoSec:30} };
+function initClock(){
+  G.clockSetting=document.getElementById('clockSel').value;
+  const p=CLOCKS[G.clockSetting];
+  if(p){ const mm=p.mainMin*60000;
+    G.clock={enabled:true, mainMs:[mm,mm], byoSec:p.byoSec, byoRemain:[p.byoSec,p.byoSec], lastTs:null};
+  } else { G.clock={enabled:false}; }
+  renderClocks();
+}
+function fmtClock(side){
+  const c=G.clock;
+  if(c.mainMs[side]>0){ const s=Math.ceil(c.mainMs[side]/1000); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+  if(c.byoSec>0){ return '秒読み'+Math.max(0,Math.ceil(c.byoRemain[side]))+'秒'; }
+  return '0:00';
+}
+function isLowClock(side){ const c=G.clock; if(c.mainMs[side]>0) return c.mainMs[side]<30000; return c.byoSec>0 && c.byoRemain[side]<=10; }
+function renderClocks(){
+  const g=document.getElementById('clockGote'), s=document.getElementById('clockSente');
+  if(!g||!s) return;
+  if(!G.clock||!G.clock.enabled){ g.classList.add('hidden'); s.classList.add('hidden'); return; }
+  [[s,0],[g,1]].forEach(([el,side])=>{
+    el.classList.remove('hidden'); el.textContent=fmtClock(side);
+    el.classList.toggle('active', !G.over && reviewIndex===null && G.turn===side && G.mode!=='tsume');
+    el.classList.toggle('low', isLowClock(side));
+  });
+}
+function timeUpLose(side){ if(G.over) return; endGame(side===G.human?'あなたの負け（時間切れ）':'あなたの勝ち（相手の時間切れ）', side===G.human?'loss':'win'); }
+function clockTick(){
+  const c=G.clock;
+  const paused = !c || !c.enabled || G.over || reviewIndex!==null || G.mode==='tsume' || document.querySelector('.overlay.on');
+  if(paused){ if(c) c.lastTs=null; return; }
+  const now=performance.now();
+  if(c.lastTs===null){ c.lastTs=now; return; }
+  const dt=now-c.lastTs; c.lastTs=now;
+  const side=G.turn;
+  if(c.mainMs[side]>0){
+    c.mainMs[side]-=dt;
+    if(c.mainMs[side]<=0){ c.mainMs[side]=0;
+      if(c.byoSec>0){ c.byoRemain[side]=c.byoSec; } else { renderClocks(); return timeUpLose(side); } }
+  } else if(c.byoSec>0){
+    c.byoRemain[side]-=dt/1000;
+    if(c.byoRemain[side]<=0){ c.byoRemain[side]=0; renderClocks(); return timeUpLose(side); }
+  } else { return timeUpLose(side); }
+  renderClocks();
+}
+function clockAfterMove(mover){
+  const c=G.clock; if(!c||!c.enabled) return;
+  if(c.mainMs[mover]<=0 && c.byoSec>0) c.byoRemain[mover]=c.byoSec;  // 秒読みは指すたびリセット
+  c.lastTs=performance.now();
+  renderClocks();
+}
+
+// 駒落ち（後手＝CPM＝上手 の駒を落とす）。座標は [row,col]
+const HANDICAPS = {
+  none:[], kyou:[[0,0]], kaku:[[1,7]], hisha:[[1,1]],
+  hikyou:[[1,1],[0,0]], nimai:[[1,1],[1,7]],
+  yonmai:[[1,1],[1,7],[0,0],[0,8]],
+  rokumai:[[1,1],[1,7],[0,0],[0,8],[0,1],[0,7]],
+  hachimai:[[1,1],[1,7],[0,0],[0,8],[0,1],[0,7],[0,2],[0,6]],
+};
+const HANDICAP_NAME={none:'平手',kyou:'香落ち',kaku:'角落ち',hisha:'飛車落ち',hikyou:'飛香落ち',nimai:'二枚落ち',yonmai:'四枚落ち',rokumai:'六枚落ち',hachimai:'八枚落ち'};
+
+function newGame(){
+  G.mode = document.getElementById('modeSel').value;
+  G.level = parseInt(document.getElementById('levelSel').value,10);
+  if(G.mode==='tsume'){ startTsume(G.tsumeIndex); return; }
+  G.board = initBoard(); G.hands = [{},{}]; G.turn = 0;
+  G.handicap = document.getElementById('handicapSel').value;
+  if(G.handicap && G.handicap!=='none'){
+    for(const [r,c] of HANDICAPS[G.handicap]) G.board[r][c]=null; // 上手(CPU)の駒を落とす
+    G.human = 0;  // 下手（あなた）＝先手・先に指す
+    document.getElementById('sideSel').disabled = true;
+  } else {
+    G.human = parseInt(document.getElementById('sideSel').value,10);
+    document.getElementById('sideSel').disabled = false;
+  }
+  initClock();
+  resultRecorded=false;
+  G.history = []; G.last = null; G.over = false; G.busy=false;
+  G.kifu = []; G.kifuMoves=[]; G.lastKifuSq=null;
+  selected=null; legalForSel=[]; adviceMarks=[]; resetReview();
+  logInitialPosition();
+  document.getElementById('advicePanel').classList.add('hidden');
+  document.getElementById('result').classList.remove('on');
+  updateNames(); renderKifu(); render();
+  const hc = (G.handicap && G.handicap!=='none') ? ('【'+HANDICAP_NAME[G.handicap]+'】') : '';
+  setStatus(hc + (G.turn===G.human?'あなたの手番です':'CPUの手番です'));
+  if(G.turn!==G.human) setTimeout(cpuTurn, 300);
+}
+
+function startTsume(idx){
+  G.mode='tsume';
+  G.tsumeIndex=(idx+PROBLEMS.length)%PROBLEMS.length;
+  const p=PROBLEMS[G.tsumeIndex]; const s=p.build();
+  G.board=s.board; G.hands=s.hands; G.turn=0; G.human=0;
+  G.history=[]; G.last=null; G.over=false; G.busy=false;
+  G.kifu=[]; G.kifuMoves=[]; G.lastKifuSq=null; G.tsumeMoves=0;
+  G.clock={enabled:false}; renderClocks();
+  selected=null; legalForSel=[]; resetReview();
+  document.getElementById('result').classList.remove('on');
+  const chk = tsumeSolved.has(G.tsumeIndex) ? '　✓解答済み' : '';
+  document.getElementById('tsumeInfo').textContent =
+    '第'+(G.tsumeIndex+1)+'問／'+PROBLEMS.length+'　「'+p.name+'」　'+p.moves+'手詰（解答済 '+tsumeSolved.size+'／'+PROBLEMS.length+'）'+chk;
+  updateNames(); renderKifu(); render();
+  setStatus('先手番：'+p.moves+'手で詰ましてください');
+}
+
+function updateNames(){
+  const sn=document.getElementById('senteName');
+  const gn=document.getElementById('goteName');
+  if(G.mode==='tsume'){ sn.textContent='▲ あなた（攻方）'; gn.textContent='△ 受方'; return; }
+  if(G.handicap && G.handicap!=='none'){ sn.textContent='▲ あなた（下手）'; gn.textContent='△ CPU（上手）'; return; }
+  if(G.human===0){ sn.textContent='▲ あなた'; gn.textContent='△ CPU'; }
+  else { sn.textContent='▲ CPU'; gn.textContent='△ あなた'; }
+}
+
+function komaLabel(pc){
+  if(pc.t==='K') return KING_LABEL[pc.o];
+  return pc.p ? KANJI[pc.t].p : KANJI[pc.t].n;
+}
+function komaEl(pc, extra){
+  const d=document.createElement('div');
+  d.className='koma '+(pc.o===0?'sente':'gote')+(pc.p?' promoted':'')+(extra?(' '+extra):'');
+  const name=komaLabel(pc); let inner;
+  if(name.length>=2){ d.classList.add('two'); inner='<span>'+name[0]+'</span><span>'+name.slice(1)+'</span>'; }
+  else inner='<span>'+name+'</span>';
+  d.innerHTML='<div class="edge"></div><div class="shape"></div><div class="label">'+inner+'</div>';
+  return d;
+}
+function render(){
+  const rv = reviewIndex!==null;                       // 棋譜再生中か
+  const vBoard = rv ? reviewBoard : G.board;
+  const vHands = rv ? reviewHands : G.hands;
+  const vLast  = rv ? reviewLast  : G.last;
+  boardEl.innerHTML='';
+  boardEl.classList.toggle('reviewing', rv);
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const cell=document.createElement('div');
+    cell.className='cell'; cell.dataset.row=r; cell.dataset.col=c;
+    if(vLast && !vLast.drop && vLast.fr===r && vLast.fc===c) cell.classList.add('lastfrom');
+    if(vLast && vLast.tr===r && vLast.tc===c) cell.classList.add('lastto');
+    if(!rv && selected && selected.r===r && selected.c===c) cell.classList.add('sel');
+    const pc=vBoard[r][c];
+    if(pc) cell.appendChild(komaEl(pc));
+    if(!rv && selected){
+      const hit = legalForSel.find(m=>m.tr===r&&m.tc===c);
+      if(hit){ const dot=document.createElement('div');
+        dot.className = vBoard[r][c] ? 'dot cap' : 'dot'; cell.appendChild(dot); }
+    }
+    if(!rv && adviceMarks.length){
+      const mk=adviceMarks.find(m=>m.tr===r&&m.tc===c);
+      if(mk){ const b=document.createElement('div'); b.className='advmark'; b.textContent=mk.rank; cell.appendChild(b); }
+    }
+    cell.addEventListener('click',()=>onCellClick(r,c));
+    boardEl.appendChild(cell);
+  }
+  renderHand(standSente, 0, vHands); renderHand(standGote, 1, vHands);
+  updateDeclareBtn();
+}
+const HAND_ORDER=['R','B','G','S','N','L','P'];
+function renderHand(el, owner, hands){
+  hands = hands || G.hands;
+  [...el.querySelectorAll('.hand-piece')].forEach(n=>n.remove());
+  for(const t of HAND_ORDER){
+    const n=hands[owner][t]||0; if(n<=0) continue;
+    const wrap=document.createElement('div'); wrap.className='hand-piece';
+    wrap.appendChild(komaEl({t,o:owner,p:false},'hand'));
+    if(n>1){ const b=document.createElement('div'); b.className='hand-count'; b.textContent=n; wrap.appendChild(b); }
+    if(reviewIndex===null && selected&&selected.hand===t&&selected.owner===owner) wrap.style.outline='2px solid var(--accent)';
+    wrap.addEventListener('click',()=>onHandClick(owner,t));
+    el.appendChild(wrap);
+  }
+}
+
+/* 棋譜 */
+const FW='１２３４５６７８９';
+const KAN='一二三四五六七八九';
+function moveNotation(mv, boardBefore, mover){
+  const mark = mover===0 ? '☗' : '☖';
+  let sq;
+  if(G.lastKifuSq && G.lastKifuSq[0]===mv.tr && G.lastKifuSq[1]===mv.tc){ sq='同'; }
+  else { const fileNum = 9-mv.tc; sq = FW[fileNum-1] + KAN[mv.tr]; }
+  let name, suffix='';
+  if(mv.drop){ name = KANJI[mv.fc].n; suffix='打'; }
+  else { name = komaLabel(boardBefore[mv.fr][mv.fc]); if(mv.promote) suffix='成'; }
+  return mark + sq + name + suffix;
+}
+function renderKifu(){
+  kifuEl.innerHTML='';
+  G.kifu.forEach((txt,i)=>{
+    const line=document.createElement('div');
+    const cur = (reviewIndex===null) ? (i===G.kifu.length-1) : (i===reviewIndex);
+    line.className='kline'+(cur?' latest':'');
+    line.innerHTML='<span class="no">'+(i+1)+'</span><span>'+txt+'</span>';
+    line.addEventListener('click',()=>enterReview(i));   // クリックでその局面へ
+    kifuEl.appendChild(line);
+  });
+  if(reviewIndex===null) kifuEl.scrollTop = kifuEl.scrollHeight;
+}
+
+/* ===== 棋譜の再生（クリックでその局面へ）＆保存 ===== */
+let reviewIndex=null, reviewBoard=null, reviewHands=null, reviewLast=null;
+function resetReview(){ reviewIndex=null; reviewBoard=reviewHands=reviewLast=null;
+  const b=document.getElementById('liveBtn'); if(b) b.classList.add('hidden'); }
+function stateAfterMove(i){        // i手目(0-based)を指した直後の局面
+  const N=G.kifu.length;
+  if(i>=N-1) return {board:G.board, hands:G.hands, last:G.last};
+  const h=G.history[i+1];          // (i+1)手目を指す直前＝i手目直後
+  return {board:h.board, hands:h.hands, last:h.last};
+}
+function enterReview(i){
+  const N=G.kifu.length; if(N===0) return;
+  if(i>=N-1){ exitReview(); return; }     // 最新手＝現局面
+  const s=stateAfterMove(i);
+  reviewIndex=i; reviewBoard=s.board; reviewHands=s.hands; reviewLast=s.last;
+  selected=null; legalForSel=[]; adviceMarks=[];
+  document.getElementById('advicePanel').classList.add('hidden');
+  document.getElementById('liveBtn').classList.remove('hidden');
+  render(); renderKifu();
+  setStatus('棋譜再生：'+(i+1)+'手目の局面（「現局面▶」で対局に戻る）','warn');
+}
+function exitReview(){
+  const wasReviewing = reviewIndex!==null;
+  resetReview(); render(); renderKifu();
+  if(wasReviewing) setStatus(G.over?'対局終了':'あなたの手番です');
+}
+function kifuText(){
+  let s='本将棋 棋譜\n手合：'+(HANDICAP_NAME[G.handicap]||'平手')+'\n';
+  if(G.kifu.length===0){ s+='（まだ手がありません）\n'; return s; }
+  G.kifu.forEach((m,i)=>{
+    const mm=G.kifuMoves[i];
+    const org = (mm && !mm.drop) ? ('('+(9-mm.fc)+(mm.fr+1)+')') : '';   // 着手元 (筋段)
+    s+=(i+1)+'　'+m+org+'\n';
+  });
+  return s;
+}
+function showKifuExport(){
+  document.getElementById('kifuDlgTitle').textContent='棋譜（コピーして保存できます）';
+  document.getElementById('kifuTextArea').value = kifuText();
+  document.getElementById('kifuOverlay').classList.add('on');
+}
+
+/* ===== 棋譜の読み込み（貼り付けて再生） ===== */
+function parseKifuText(text){
+  const lines=text.split(/\r?\n/);
+  let handicap='none'; const moves=[];
+  for(let raw of lines){
+    let line=raw.trim(); if(!line) continue;
+    const hcm=line.match(/^手合[：:]\s*(.+)$/);
+    if(hcm){ const nm=hcm[1].trim(); for(const k in HANDICAP_NAME){ if(HANDICAP_NAME[k]===nm) handicap=k; } continue; }
+    line=line.replace(/^\s*\d+[\.\s　]*/,'');           // 先頭の手数番号を除去
+    let origin=null;
+    const om=line.match(/[(（]\s*(\d)\s*(\d)\s*[)）]\s*$/);
+    if(om){ origin={fr:parseInt(om[2],10)-1, fc:9-parseInt(om[1],10)}; line=line.slice(0,om.index).trim(); }
+    if(!/^[☗☖▲△]/.test(line)) continue;               // 指し手行のみ
+    moves.push({str:line, origin});
+  }
+  return {handicap, moves};
+}
+function canonMove(s){ return s.replace(/▲/g,'☗').replace(/△/g,'☖').replace(/\s/g,''); }
+function loadKifu(text){
+  const parsed=parseKifuText(text);
+  if(!parsed.moves.length){ setStatus('読み込める指し手が見つかりませんでした','warn'); return false; }
+  document.getElementById('modeSel').value='play';
+  document.getElementById('handicapSel').value=parsed.handicap;
+  G.mode='play'; applyModeControls('play'); newGame();   // 手合付きで初期化
+  let n=0, failAt=-1;
+  for(let i=0;i<parsed.moves.length;i++){
+    const target=parsed.moves[i];
+    const tstr=canonMove(target.str);
+    const legal=legalMoves({board:G.board,hands:G.hands,turn:G.turn,last:G.last}, G.turn);
+    const cands=legal.filter(m=>canonMove(moveNotation(m,G.board,G.turn))===tstr);
+    let chosen=null;
+    if(cands.length===1) chosen=cands[0];
+    else if(cands.length>1){ chosen=(target.origin && cands.find(m=>!m.drop&&m.fr===target.origin.fr&&m.fc===target.origin.fc)) || cands[0]; }
+    if(!chosen){ failAt=i+1; break; }
+    G.history.push(cloneState());
+    recordKifu(chosen, G.turn);
+    const st={board:G.board,hands:G.hands,turn:G.turn,last:G.last};
+    applyMove(st, chosen); G.turn=st.turn; G.last=st.last;
+    G.posLog.push({key:positionKey(), side:G.turn, checked:inCheck(G.board,G.turn)});
+    n++;
+  }
+  G.human=0; resetReview(); updateNames(); renderKifu(); render();
+  if(failAt>0){ setStatus(n+'手まで読み込みました（'+failAt+'手目が解釈できず停止）','warn'); }
+  else { setStatus('棋譜を読み込みました（'+n+'手）'); }
+  if(!G.over && checkGameEnd()) return true;
+  if(!G.over && G.turn!==G.human){ G.busy=true; setTimeout(cpuTurn, 500); }
+  return true;
+}
+function showKifuImport(){
+  document.getElementById('kifuDlgTitle').textContent='棋譜を貼り付けて「読み込む」を押してください';
+  const ta=document.getElementById('kifuTextArea');
+  ta.value=''; ta.placeholder='例）\n1 ☗７六歩\n2 ☖３四歩 …';
+  document.getElementById('kifuOverlay').classList.add('on');
+}
+function recordKifu(mv, mover){
+  const txt = moveNotation(mv, G.board, mover); // 適用前のboardで
+  G.kifu.push(txt);
+  G.kifuMoves.push({fr:mv.fr,fc:mv.fc,tr:mv.tr,tc:mv.tc,drop:!!mv.drop,promote:!!mv.promote});
+  G.lastKifuSq=[mv.tr,mv.tc];
+  renderKifu();
+}
+
+function curLegal(){ return legalMoves({board:G.board,hands:G.hands,turn:G.turn,last:G.last}, G.turn); }
+
+function onCellClick(r,c){
+  if(reviewIndex!==null){ exitReview(); return; }   // 再生中は現局面に戻す
+  if(G.over||G.busy) return;
+  if(G.turn!==G.human) return;
+  if(adviceMarks.length) closeAdvice();
+  const pc=G.board[r][c];
+  if(selected){
+    const hit = legalForSel.find(m=>m.tr===r&&m.tc===c);
+    if(hit){ doHumanMove(hit); return; }
+  }
+  if(pc && pc.o===G.human){
+    selected={r,c};
+    legalForSel=curLegal().filter(m=>!m.drop && m.fr===r && m.fc===c);
+    render(); return;
+  }
+  selected=null; legalForSel=[]; render();
+}
+function onHandClick(owner,t){
+  if(reviewIndex!==null){ exitReview(); return; }
+  if(G.over||G.busy) return;
+  if(G.turn!==G.human || owner!==G.human) return;
+  if(adviceMarks.length) closeAdvice();
+  selected={hand:t, owner};
+  legalForSel=curLegal().filter(m=>m.drop && m.fc===t);
+  render();
+}
+function doHumanMove(mv){
+  if(!mv.drop){
+    const both = legalForSel.filter(m=>m.tr===mv.tr&&m.tc===mv.tc);
+    const hasP=both.some(m=>m.promote), hasN=both.some(m=>!m.promote);
+    if(hasP && hasN){
+      askPromotion(G.board[mv.fr][mv.fc], yes=>commitHuman(both.find(m=>m.promote===yes)));
+      return;
+    }
+  }
+  commitHuman(mv);
+}
+
+function commitHuman(mv){
+  // 指導モード：適用前の局面で「もっと良い手」がないか感想を用意
+  let blunder=null;
+  if(G.mode==='teach' && !G.over && G.turn===G.human){ blunder=detectBlunder(mv); }
+  adviceMarks=[]; document.getElementById('advicePanel').classList.add('hidden');
+  const cap = !mv.drop && !!G.board[mv.tr][mv.tc];
+  G.history.push(cloneState());
+  recordKifu(mv, G.turn);
+  const st={board:G.board,hands:G.hands,turn:G.turn,last:G.last};
+  applyMove(st, mv); G.turn=st.turn; G.last=st.last;
+  afterMoveFx(cap); clockAfterMove(G.turn^1);
+  selected=null; legalForSel=[]; render();
+  if(G.mode==='tsume'){ afterTsumeHuman(); return; }
+  if(pushPosAndCheckRepetition()) return;
+  if(checkGameEnd()) return;
+  announceCheck();
+  if(blunder){ showBlunderNote(blunder); }   // 感想：もっと良い手を表示（CPUの手番中も残る）
+  if(G.turn!==G.human){ G.busy=true; setTimeout(cpuTurn, 250); }
+}
+
+function afterTsumeHuman(){
+  G.tsumeMoves++;
+  const goteMated = inCheck(G.board,1) && legalMoves({board:G.board,hands:G.hands,turn:1,last:G.last},1).length===0;
+  if(goteMated){ tsumeSuccess(); return; }
+  const p=PROBLEMS[G.tsumeIndex];
+  if(!inCheck(G.board,1)){ setStatus('王手ではありません。「やり直し」でリセットできます', 'warn'); }
+  else setStatus('受方の応手…');
+  if(G.tsumeMoves > Math.ceil(p.moves/2)){ setStatus('手数がかかりすぎています。「やり直し」でリセットできます','warn'); }
+  // 受方（CPU）応手
+  G.busy=true;
+  setTimeout(()=>{
+    resetReview();
+    const state={board:G.board,hands:G.hands,turn:1,last:G.last};
+    const lm=legalMoves(state,1);
+    if(lm.length===0){ // 王手なしで手が無い＝実質詰みでないが終了
+      G.busy=false; if(inCheck(G.board,1)) tsumeSuccess(); return;
+    }
+    G.turn=1;
+    const mv=chooseCpuMove();
+    const cap = !mv.drop && !!G.board[mv.tr][mv.tc];
+    G.history.push(cloneState());
+    recordKifu(mv, 1);
+    applyMove(state, mv); G.turn=state.turn; G.last=state.last;
+    afterMoveFx(cap);
+    G.busy=false; render();
+    setStatus('あなたの手番：続けて詰ましてください');
+  }, 300);
+}
+
+function commitCpu(mv){
+  const cap = !mv.drop && !!G.board[mv.tr][mv.tc];
+  G.history.push(cloneState());
+  recordKifu(mv, G.turn);
+  const st={board:G.board,hands:G.hands,turn:G.turn,last:G.last};
+  applyMove(st, mv); G.turn=st.turn; G.last=st.last;
+  afterMoveFx(cap); clockAfterMove(G.turn^1);
+}
+function cpuTurn(){
+  if(G.over) return;
+  resetReview();
+  setStatus('CPU 思考中…');
+  setTimeout(()=>{
+    const mv=chooseCpuMove();
+    if(!mv){ endGame('あなたの勝ち！（詰み）','win'); return; }
+    commitCpu(mv);
+    G.busy=false; render();
+    if(pushPosAndCheckRepetition()) return;
+    if(checkGameEnd()) return;
+    announceCheck();
+  }, 30);
+}
+function checkGameEnd(){
+  if(curLegal().length===0){
+    const loser=G.turn;
+    if((loser^1)===G.human) endGame('あなたの勝ち！（詰み）','win');
+    else endGame('あなたの負け…（詰み）','loss');
+    return true;
+  }
+  return false;
+}
+function announceCheck(){
+  if(inCheck(G.board, G.turn)){
+    const who=(G.turn===G.human)?'あなた':'CPU';
+    setStatus('王手！（'+who+'の玉）', 'check');
+  } else setStatus(G.turn===G.human?'あなたの手番':'CPUの手番');
+}
+
+function tsumeSuccess(){
+  G.over=true;
+  markTsumeSolved(G.tsumeIndex);
+  const p=PROBLEMS[G.tsumeIndex];
+  document.getElementById('tsumeInfo').textContent =
+    '第'+(G.tsumeIndex+1)+'問／'+PROBLEMS.length+'　「'+p.name+'」　'+p.moves+'手詰　✓解答済み';
+  showResult('正解！ 詰み 🎉', [
+    {label:'次の問題へ', main:true, act:()=>startTsume(G.tsumeIndex+1)},
+    {label:'もう一度', sub:true, act:()=>startTsume(G.tsumeIndex)},
+  ]);
+  setStatus('正解！お見事です');
+}
+function endGame(text, outcome){
+  G.over=true;
+  recordResult(outcome);
+  showResult(text, [ {label:'もう一局', main:true, act:newGame} ]);
+  setStatus(text);
+}
+function showResult(text, buttons){
+  document.getElementById('resultText').textContent=text;
+  const box=document.getElementById('resultBtns'); box.innerHTML='';
+  buttons.forEach(b=>{
+    const btn=document.createElement('button');
+    btn.textContent=b.label; if(b.sub) btn.className='sub';
+    btn.onclick=()=>{ document.getElementById('result').classList.remove('on'); b.act(); };
+    box.appendChild(btn);
+  });
+  document.getElementById('result').classList.add('on');
+}
+function endGameDraw(text){
+  G.over=true;
+  recordResult('draw');
+  showResult(text, [ {label:'もう一局', main:true, act:newGame} ]);
+  setStatus(text);
+}
+/* ===== 戦績（勝敗記録） ===== */
+const STATS_KEY='shogi_stats_v1';
+let stats={win:0,loss:0,draw:0};
+try{ const raw=localStorage.getItem(STATS_KEY); if(raw) stats=Object.assign(stats,JSON.parse(raw)); }catch(e){}
+let resultRecorded=false;
+function recordResult(outcome){
+  if(!outcome || resultRecorded) return;
+  if(G.mode!=='play' && G.mode!=='teach') return;
+  resultRecorded=true;
+  if(stats[outcome]!==undefined) stats[outcome]++;
+  try{ localStorage.setItem(STATS_KEY, JSON.stringify(stats)); }catch(e){}
+  renderStats();
+}
+function renderStats(){
+  const el=document.getElementById('statsLine'); if(!el) return;
+  el.innerHTML='戦績　<b>'+stats.win+'</b>勝 <b>'+stats.loss+'</b>敗 <b>'+stats.draw+'</b>分'+
+    '　<button id="statsReset">リセット</button>';
+  const rb=document.getElementById('statsReset'); if(rb) rb.onclick=()=>{
+    stats={win:0,loss:0,draw:0}; try{ localStorage.setItem(STATS_KEY,JSON.stringify(stats)); }catch(e){} renderStats();
+  };
+}
+
+/* ===== 詰将棋の学習サポート（解けた印✓・解答表示） ===== */
+const TSUME_SOLVED_KEY='shogi_tsume_solved_v1';
+let tsumeSolved=new Set();
+try{ const raw=localStorage.getItem(TSUME_SOLVED_KEY); if(raw) tsumeSolved=new Set(JSON.parse(raw)); }catch(e){}
+function markTsumeSolved(i){ tsumeSolved.add(i); try{ localStorage.setItem(TSUME_SOLVED_KEY, JSON.stringify([...tsumeSolved])); }catch(e){} }
+function tsumeSolution(){
+  const p=PROBLEMS[G.tsumeIndex]; const s=p.build();
+  let st={board:s.board, hands:s.hands, turn:0, last:null};
+  const line=[]; let depth=p.moves;
+  const savedLast=G.lastKifuSq; G.lastKifuSq=null;
+  const cl=x=>({board:x.board.map(r=>r.map(c=>c?{t:c.t,o:c.o,p:c.p}:null)),hands:[{...x.hands[0]},{...x.hands[1]}],turn:x.turn,last:x.last});
+  while(depth>0){
+    const mv=solveTsume(st, depth); if(!mv) break;
+    line.push(moveNotation(mv, st.board, 0)); G.lastKifuSq=[mv.tr,mv.tc];
+    applyMove(st, mv); depth--;
+    if(depth<=0) break;
+    const dm=legalMoves(st,1); if(dm.length===0) break;
+    let best=dm[0], bestLen=-1;
+    for(const d of dm){ const s2=cl(st); applyMove(s2,d);
+      let L=1; for(; L<=depth-1; L+=2){ if(solveTsume(s2,L)) break; }
+      if(L>bestLen){ bestLen=L; best=d; } }
+    line.push(moveNotation(best, st.board, 1)); G.lastKifuSq=[best.tr,best.tc];
+    applyMove(st, best); depth--;
+  }
+  G.lastKifuSq=savedLast;
+  return line;
+}
+function showTsumeSolution(){
+  const line=tsumeSolution();
+  adviceMarks=[];
+  document.getElementById('adviceTitle').textContent='詰め手順（解答）';
+  const list=document.getElementById('adviceList'); list.innerHTML='';
+  const d=document.createElement('div'); d.className='advice-note';
+  d.innerHTML= line.length ? line.map((m,i)=>(i+1)+'. '+m).join('<br>') : '（手順が見つかりませんでした）';
+  list.appendChild(d);
+  document.getElementById('advicePanel').classList.remove('hidden');
+}
+function setStatus(txt, cls){
+  statusEl.textContent=txt;
+  statusEl.className='status'+(cls?(' '+cls):'');
+}
+
+/* ===== 特殊ルール：千日手・入玉宣言 ===== */
+function posKeyOf(st){
+  let s='';
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){ const p=st.board[r][c]; s+= p?(p.t+p.o+(p.p?'+':'-')):'..'; }
+  s+='|'+JSON.stringify(st.hands[0])+'|'+JSON.stringify(st.hands[1])+'|'+st.turn;
+  return s;
+}
+function positionKey(){ return posKeyOf({board:G.board,hands:G.hands,turn:G.turn}); }
+function logInitialPosition(){ G.posLog=[{key:positionKey(), side:G.turn, checked:inCheck(G.board,G.turn)}]; }
+function pushPosAndCheckRepetition(){
+  if(G.mode==='tsume') return false;
+  const key=positionKey();
+  G.posLog.push({key, side:G.turn, checked:inCheck(G.board,G.turn)});
+  const same=G.posLog.filter(e=>e.key===key);
+  if(same.length>=4){
+    if(same.every(e=>e.checked)){        // 受け方が常に王手されている＝連続王手
+      const checker=G.turn^1;
+      endGame(checker===G.human ? 'あなたの反則負け（連続王手の千日手）' : 'あなたの勝ち（相手の連続王手の千日手）', checker===G.human?'loss':'win');
+    } else {
+      endGameDraw('千日手（引き分け）');
+    }
+    return true;
+  }
+  return false;
+}
+function declarePoints(side){
+  const zone = side===0 ? [0,1,2] : [6,7,8];
+  const kp = findKing(G.board, side);
+  let count=0, points=0;
+  for(const r of zone) for(let c=0;c<9;c++){ const p=G.board[r][c];
+    if(p&&p.o===side&&p.t!=='K'){ count++; points+=(p.t==='R'||p.t==='B')?5:1; } }
+  const h=G.hands[side]; for(const t in h){ if(h[t]>0) points+=((t==='R'||t==='B')?5:1)*h[t]; }
+  return {kp, inZone: kp?zone.includes(kp[0]):false, count, points};
+}
+function tryDeclareWin(side){
+  const d=declarePoints(side);
+  if(!d.inZone) return {ok:false, reason:'玉が敵陣（3段目以内）に入っていません'};
+  if(inCheck(G.board, side)) return {ok:false, reason:'王手がかかっています'};
+  if(d.count<10) return {ok:false, reason:'敵陣内の駒が10枚未満です（現在'+d.count+'枚）'};
+  const need = side===0?28:27;
+  if(d.points<need) return {ok:false, reason:'点数不足です（'+d.points+'点／必要'+need+'点）'};
+  return {ok:true, points:d.points};
+}
+function declareWin(){
+  if(G.over||G.busy||G.mode==='tsume'||reviewIndex!==null) return;
+  if(G.turn!==G.human){ setStatus('自分の手番のときに宣言できます','warn'); return; }
+  const r=tryDeclareWin(G.human);
+  if(r.ok) endGame('入玉宣言勝ち！（あなた '+r.points+'点）','win');
+  else setStatus('入玉宣言できません：'+r.reason,'warn');
+}
+function updateDeclareBtn(){
+  const b=document.getElementById('declareBtn'); if(!b) return;
+  const show = (G.mode==='play'||G.mode==='teach') && !G.over && reviewIndex===null &&
+    G.turn===G.human && declarePoints(G.human).inZone;
+  b.classList.toggle('hidden', !show);
+}
+
+let promoCb=null;
+function askPromotion(pc, cb){
+  promoCb=cb;
+  document.getElementById('promoText').textContent = komaLabel(pc)+'　成りますか？';
+  document.getElementById('promoOverlay').classList.add('on');
+}
+document.getElementById('promoYes').onclick=()=>{ document.getElementById('promoOverlay').classList.remove('on'); const f=promoCb; promoCb=null; if(f)f(true); };
+document.getElementById('promoNo').onclick=()=>{ document.getElementById('promoOverlay').classList.remove('on'); const f=promoCb; promoCb=null; if(f)f(false); };
+
+function undo(){
+  if(G.history.length===0) return;
+  let steps = (G.mode!=='tsume' && G.turn===G.human) ? 2 : 1;
+  steps=Math.min(steps, G.history.length);
+  let s=null; for(let i=0;i<steps;i++) s=G.history.pop();
+  restoreState(s);
+  for(let i=0;i<steps && G.posLog.length>1;i++) G.posLog.pop();
+  G.over=false; G.busy=false;
+  document.getElementById('result').classList.remove('on');
+  selected=null; legalForSel=[]; adviceMarks=[]; resetReview();
+  document.getElementById('advicePanel').classList.add('hidden');
+  render(); renderKifu();
+  setStatus(G.mode==='tsume'?'やり直しました':'待った：あなたの手番');
+}
+
+function tsumeHint(){
+  const state={board:G.board,hands:G.hands,turn:0,last:G.last};
+  const p=PROBLEMS[G.tsumeIndex];
+  const remain = p.moves - G.tsumeMoves;
+  const mv = solveTsume(state, Math.max(1,remain));
+  if(mv){ setStatus('ヒント：初手は '+moveNotation(mv, G.board, 0), 'warn'); }
+  else setStatus('この局面から'+Math.max(1,remain)+'手詰は見つかりません','warn');
+}
+
+/* ===== 指導モード：次の一手 候補3手 ===== */
+function moveScoreLabel(v){
+  if(v >  MATE-100000) return '詰みへ！';
+  if(v < -(MATE-100000)) return '受けなし…';
+  if(v>=800) return 'かなり有利';
+  if(v>=250) return '有利';
+  if(v> -250) return '互角';
+  if(v> -800) return 'やや不利';
+  return '苦しい';
+}
+function scoreAllMoves(depth){
+  TT.clear();
+  const o=G.turn;
+  const root=quickClone({board:G.board,hands:G.hands,turn:o,last:G.last});
+  const moves=legalMoves(root,o);
+  if(!moves.length) return [];
+  searchDeadline = performance.now()+9000; timedOut=false; nodeCount=0;
+  const scored=moves.map(mv=>{
+    const s=quickClone(root); applyMove(s,mv);
+    return {mv, val:-negamax(s, depth-1, -Infinity, Infinity, 1)};
+  });
+  scored.sort((a,b)=>b.val-a.val);
+  return scored;
+}
+function analyzeTopMoves(n){
+  const scored=scoreAllMoves((G.level>=3)?3:2);
+  if(!scored.length) return [];
+  // 行き先マスが重複しないよう、各マスは最善の一手だけ残す（盤上バッジの重なり防止）
+  const seen=new Set(); const uniq=[];
+  for(const e of scored){
+    const key = e.mv.tr+','+e.mv.tc;
+    if(seen.has(key)) continue; seen.add(key); uniq.push(e);
+    if(uniq.length>=n) break;
+  }
+  return uniq;
+}
+function movesEqual(a,b){
+  return a.drop===b.drop && a.tr===b.tr && a.tc===b.tc && a.promote===b.promote &&
+    (a.drop ? a.fc===b.fc : (a.fr===b.fr && a.fc===b.fc));
+}
+// 指導モード：直前の手が最善から大きく離れていたら「もっと良い手」を返す（適用前に呼ぶ）
+function detectBlunder(mv){
+  const scored=scoreAllMoves(2);
+  if(!scored.length) return null;
+  const best=scored[0];
+  const played=scored.find(e=>movesEqual(e.mv,mv));
+  if(!played || movesEqual(best.mv,mv)) return null;
+  const loss=best.val-played.val;
+  if(loss<300) return null;                       // 3点未満は許容
+  return { note:moveNotation(best.mv, G.board, G.human), loss };
+}
+function showBlunderNote(b){
+  adviceMarks=[];
+  document.getElementById('adviceTitle').textContent='⚠ 感想：もっと良い手';
+  const list=document.getElementById('adviceList'); list.innerHTML='';
+  const d=document.createElement('div'); d.className='advice-note';
+  d.innerHTML='直前の手より <b>'+b.note+'</b> の方が良かったようです。<br>次の一手に迷ったら「指導」を押してください。';
+  list.appendChild(d);
+  document.getElementById('advicePanel').classList.remove('hidden');
+}
+function showAdvice(){
+  if(G.mode!=='teach' || G.over || G.busy || G.turn!==G.human) return;
+  setStatus('候補手を分析中…','warn');
+  G.busy=true;
+  setTimeout(()=>{
+    let top;
+    try{ top=analyzeTopMoves(3); } finally { G.busy=false; }
+    if(!top || !top.length){ setStatus('指せる手がありません'); return; }
+    document.getElementById('adviceTitle').textContent='次の一手 候補（上ほど有力）';
+    const list=document.getElementById('adviceList'); list.innerHTML='';
+    adviceMarks = top.map((t,i)=>({tr:t.mv.tr,tc:t.mv.tc,rank:i+1}));
+    top.forEach((t,i)=>{
+      const btn=document.createElement('button');
+      btn.className='advice-btn'+(i===0?' best':'');
+      const note=moveNotation(t.mv, G.board, G.human);
+      const ev=moveScoreLabel(t.val)+(i===0?'（最善）':'');
+      btn.innerHTML='<span class="rk">'+(i+1)+'</span><span class="mv">'+note+'</span><span class="ev">'+ev+'</span>';
+      btn.onclick=()=>{ commitHuman(t.mv); };  // commitHuman が候補表示を閉じる
+      list.appendChild(btn);
+    });
+    document.getElementById('advicePanel').classList.remove('hidden');
+    render();
+    setStatus('候補から選ぶ／盤で自分で指す、どちらもOK');
+  }, 20);
+}
+function closeAdvice(){
+  adviceMarks=[];
+  document.getElementById('advicePanel').classList.add('hidden');
+  render();
+}
+
+function applyModeControls(m){
+  const tsume = (m==='tsume');
+  document.getElementById('adviceBtn').classList.toggle('hidden', m!=='teach');   // 指導ボタンは指導モードのみ
+  document.getElementById('tsumeControls').classList.toggle('hidden', !tsume);
+  document.getElementById('tsumeInfo').classList.toggle('hidden', !tsume);
+  // 詰将棋では対局専用の設定を隠す
+  ['sideWrap','handiWrap','clockWrap'].forEach(id=>document.getElementById(id).classList.toggle('hidden', tsume));
+  document.getElementById('suspendBtn').classList.toggle('hidden', tsume);
+  document.getElementById('resumeBtn').classList.toggle('hidden', tsume);
+  document.getElementById('hintText').textContent =
+      m==='tsume' ? '先手（あなた）だけを動かして、受方の玉を詰ませてください。持ち駒を打つ／盤上の駒を動かす、どちらもOK。'
+    : m==='teach' ? 'CPUと対局しながら、「指導」ボタンで次の一手の候補（最善手から3つ）を表示できます。'
+    :               '駒をタップ→行き先をタップで移動。持ち駒はタップして盤上へ打てます。';
+}
+function switchMode(){
+  closeAdvice();
+  const m=document.getElementById('modeSel').value; G.mode=m;
+  applyModeControls(m);
+  newGame();
+}
+
+/* ===== 中断・再開（ブラウザのローカル保存に記録） ===== */
+const SAVE_KEY='shogi_suspend_v1';
+function snapshot(){
+  return { v:1, mode:G.mode, human:G.human, level:G.level, turn:G.turn, over:G.over,
+    board:G.board, hands:G.hands, last:G.last, kifu:G.kifu, lastKifuSq:G.lastKifuSq,
+    history:G.history, tsumeIndex:G.tsumeIndex, tsumeMoves:G.tsumeMoves, handicap:G.handicap,
+    kifuMoves:G.kifuMoves, clock:G.clock, clockSetting:G.clockSetting, posLog:G.posLog };
+}
+function hasSave(){ try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; } }
+function updateResumeBtn(){ const b=document.getElementById('resumeBtn'); if(b) b.disabled=!hasSave(); }
+function suspendGame(){
+  if(G.mode==='tsume'){ setStatus('詰将棋は中断の対象外です','warn'); return; }
+  try{
+    localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot()));
+    updateResumeBtn();
+    setStatus('中断しました。ページを閉じても「再開」で続きから戻れます','warn');
+  }catch(e){ setStatus('中断の保存に失敗しました（ブラウザの制限かもしれません）','warn'); }
+}
+function resumeGame(){
+  let raw=null; try{ raw=localStorage.getItem(SAVE_KEY); }catch(e){}
+  if(!raw){ setStatus('保存された対局がありません','warn'); return; }
+  let s; try{ s=JSON.parse(raw); }catch(e){ setStatus('保存データが読めませんでした','warn'); return; }
+  G.mode=s.mode; G.human=s.human; G.level=s.level; G.turn=s.turn; G.over=!!s.over; G.busy=false;
+  G.board=s.board; G.hands=s.hands; G.last=s.last||null;
+  G.kifu=s.kifu||[]; G.lastKifuSq=s.lastKifuSq||null; G.history=s.history||[];
+  G.tsumeIndex=s.tsumeIndex||0; G.tsumeMoves=s.tsumeMoves||0;
+  G.handicap=s.handicap||'none';
+  G.kifuMoves=s.kifuMoves||[];
+  G.clockSetting=s.clockSetting||'off';
+  G.clock=s.clock||{enabled:false}; if(G.clock) G.clock.lastTs=null;
+  G.posLog=s.posLog||[{key:'',side:G.turn,checked:false}];
+  document.getElementById('clockSel').value=G.clockSetting;
+  document.getElementById('modeSel').value=G.mode;
+  document.getElementById('levelSel').value=String(G.level);
+  document.getElementById('sideSel').value=String(G.human);
+  document.getElementById('handicapSel').value=G.handicap;
+  document.getElementById('sideSel').disabled=(G.handicap!=='none');
+  applyModeControls(G.mode);
+  selected=null; legalForSel=[]; adviceMarks=[]; resetReview();
+  document.getElementById('advicePanel').classList.add('hidden');
+  document.getElementById('result').classList.remove('on');
+  if(G.mode==='tsume'){
+    const p=PROBLEMS[G.tsumeIndex];
+    document.getElementById('tsumeInfo').textContent =
+      '第'+(G.tsumeIndex+1)+'問／'+PROBLEMS.length+'　「'+p.name+'」　'+p.moves+'手詰　あなた＝先手';
+  }
+  updateNames(); renderKifu(); render(); renderClocks();
+  setStatus('対局を再開しました');
+  if(!G.over && G.mode!=='tsume' && G.turn!==G.human){ G.busy=true; setTimeout(cpuTurn, 400); }
+}
+
+document.getElementById('newBtn').onclick=newGame;
+document.getElementById('undoBtn').onclick=undo;
+document.getElementById('suspendBtn').onclick=suspendGame;
+document.getElementById('resumeBtn').onclick=resumeGame;
+document.getElementById('adviceBtn').onclick=showAdvice;
+document.getElementById('declareBtn').onclick=declareWin;
+document.getElementById('adviceClose').onclick=closeAdvice;
+document.getElementById('levelSel').onchange=e=>{G.level=parseInt(e.target.value,10);};
+document.getElementById('sideSel').onchange=newGame;
+document.getElementById('handicapSel').onchange=newGame;
+document.getElementById('clockSel').onchange=newGame;
+document.getElementById('soundBtn').onclick=toggleSound;
+document.getElementById('liveBtn').onclick=exitReview;
+document.getElementById('exportBtn').onclick=showKifuExport;
+document.getElementById('importBtn').onclick=showKifuImport;
+document.getElementById('kifuLoad').onclick=()=>{
+  const txt=document.getElementById('kifuTextArea').value;
+  document.getElementById('kifuOverlay').classList.remove('on');
+  loadKifu(txt);
+};
+document.getElementById('kifuCloseBtn').onclick=()=>document.getElementById('kifuOverlay').classList.remove('on');
+document.getElementById('kifuCopy').onclick=()=>{
+  const ta=document.getElementById('kifuTextArea'); ta.select();
+  let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+  if(navigator.clipboard){ try{ navigator.clipboard.writeText(ta.value); ok=true; }catch(e){} }
+  document.getElementById('kifuCopy').textContent = ok?'コピーしました':'コピー';
+  setTimeout(()=>{document.getElementById('kifuCopy').textContent='コピー';},1500);
+};
+document.getElementById('modeSel').onchange=switchMode;
+document.getElementById('settingsToggle').onclick=()=>{
+  const p=document.getElementById('settingsPanel'); const hidden=p.classList.toggle('hidden');
+  document.getElementById('settingsToggle').textContent = hidden ? '⚙ 設定' : '⚙ 設定 ▲';
+};
+function filteredTsumeIndices(){
+  const f=document.getElementById('tsumeFilter').value;
+  const all=PROBLEMS.map((p,i)=>i);
+  return (f==='all') ? all : all.filter(i=>PROBLEMS[i].moves===parseInt(f,10));
+}
+function tsumeNav(dir){
+  const list=filteredTsumeIndices(); if(!list.length) return;
+  let pos=list.indexOf(G.tsumeIndex); if(pos<0) pos=(dir>0?-1:0);
+  pos=(pos+dir+list.length)%list.length;
+  startTsume(list[pos]);
+}
+document.getElementById('tsumePrev').onclick=()=>tsumeNav(-1);
+document.getElementById('tsumeNext').onclick=()=>tsumeNav(1);
+document.getElementById('tsumeFilter').onchange=()=>{ const l=filteredTsumeIndices(); if(l.length) startTsume(l[0]); };
+document.getElementById('tsumeReset').onclick=()=>startTsume(G.tsumeIndex);
+document.getElementById('tsumeHint').onclick=tsumeHint;
+document.getElementById('tsumeSolBtn').onclick=showTsumeSolution;
+
+/* ===== 見た目テーマ ===== */
+const THEME_KEY='shogi_theme_v1';
+function applyTheme(t){ document.body.setAttribute('data-theme', t==='default'?'':t); try{ localStorage.setItem(THEME_KEY,t); }catch(e){} }
+(function(){ let t='default'; try{ t=localStorage.getItem(THEME_KEY)||'default'; }catch(e){}
+  document.getElementById('themeSel').value=t; applyTheme(t); })();
+document.getElementById('themeSel').onchange=e=>applyTheme(e.target.value);
+
+newGame();
+updateResumeBtn();
+renderStats();
+setInterval(clockTick, 200);   // 対局時計の進行
+</script>
+<script>
+/* PWA: オフラインでも使えるようにサービスワーカーを登録 */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
+</script>
