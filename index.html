@@ -177,6 +177,11 @@
     padding:2px 8px;font-size:11px;font-family:inherit;cursor:pointer;margin-left:6px;}
   .hint{text-align:center;font-size:12px;color:#a99;margin-top:10px;line-height:1.6;}
   #tsumeInfo{font-size:13px;color:var(--accent);}
+  #josekiInfo{background:var(--panel);border:1px solid #5a4630;border-radius:10px;padding:8px 12px;margin-top:6px;}
+  #josekiInfo .jt{font-size:14px;color:var(--accent);font-weight:700;}
+  #josekiInfo .jd{font-size:12px;color:#c9b48c;margin-top:2px;line-height:1.6;}
+  #josekiInfo .jc{font-size:14px;margin-top:6px;line-height:1.6;}
+  #josekiInfo .jc b{color:#ffcf7a;}
 
   /* 指導モード */
   .advice-panel{margin-top:8px;background:var(--panel);
@@ -213,6 +218,7 @@
           <option value="play" selected>対局</option>
           <option value="teach">指導</option>
           <option value="tsume">詰将棋</option>
+          <option value="joseki">定跡</option>
         </select>
       </label>
       <button id="newBtn">新規対局</button>
@@ -236,6 +242,15 @@
       <button id="tsumeHint">ヒント</button>
       <button id="tsumeSolBtn">解答</button>
       <button id="tsumeReset">やり直し</button>
+    </span>
+    <span id="josekiControls" class="hidden">
+      <label>戦法
+        <select id="josekiSel"></select>
+      </label>
+      <button id="jsFirst">⏮最初</button>
+      <button id="jsPrev">◀戻る</button>
+      <button id="jsNext">次へ▶</button>
+      <button id="jsPractice">✋自分で指す</button>
     </span>
     <div id="settingsPanel" class="settings-panel hidden">
       <label>強さ
@@ -289,6 +304,7 @@
     </div>
   </div>
   <div id="tsumeInfo" class="hidden"></div>
+  <div id="josekiInfo" class="hidden"></div>
 
   <div class="advice-panel hidden" id="advicePanel">
     <div class="ah"><span id="adviceTitle">次の一手 候補（上ほど有力）</span><span class="x" id="adviceClose">×</span></div>
@@ -797,6 +813,87 @@ const PROBLEMS = TSUME_RAW.slice().sort((a,b)=>a.n-b.n).map(d=>{
     return {board:b, hands:[Object.assign({},d.h0), Object.assign({},d.h1)]}; } };
 });
 
+/* ================= 定跡データ（全手を合法性検証済み） ================= */
+function jsq(f,r){ return [r-1, 9-f]; }                    // 筋段 → [row,col]
+function jmv(a){ const [fr,fc]=jsq(a[0],a[1]); const [tr,tc]=jsq(a[2],a[3]); return {fr,fc,tr,tc,promote:!!a[4],drop:false}; }
+const JOSEKI = [
+  { name:'四間飛車', side:0, desc:'飛車を6筋（四間目）に振る、振り飛車の代表格。角道を止め美濃囲いを目指します。',
+    moves:[ {f:[7,7,7,6],n:'角道を開ける第一歩。'},{f:[3,3,3,4],n:'後手も角道を開ける。'},{f:[6,7,6,6],n:'角道を止め振り飛車へ。'},{f:[8,3,8,4],n:'後手は飛車先を伸ばす。'},{f:[2,8,6,8],n:'飛車を6筋へ＝「四間飛車」。'},{f:[8,4,8,5],n:''},{f:[8,8,7,7],n:'角を上がり8筋の傷を消す。'},{f:[7,1,6,2],n:'後手は居飛車で対抗。'},{f:[5,9,4,8],n:'玉を囲いへ。美濃囲いを目指す。'},{f:[3,1,3,2],n:''} ] },
+  { name:'中飛車', side:0, desc:'飛車を中央（5筋）へ。攻めの幅が広く初心者にも人気です。',
+    moves:[ {f:[7,7,7,6],n:'角道を開ける。'},{f:[3,3,3,4],n:''},{f:[5,7,5,6],n:'5筋の歩を伸ばし準備。'},{f:[8,3,8,4],n:''},{f:[2,8,5,8],n:'飛車を中央5筋へ＝「中飛車」。'},{f:[5,3,5,4],n:'後手も中央で受ける。'},{f:[5,9,4,8],n:'玉を囲いへ寄せる。'},{f:[5,1,5,2],n:''} ] },
+  { name:'棒銀（居飛車）', side:0, desc:'銀を2筋へ繰り出し飛車と協力、一点突破を狙う攻めの戦法。',
+    moves:[ {f:[7,7,7,6],n:'角道を開ける。'},{f:[8,3,8,4],n:''},{f:[2,7,2,6],n:'飛車先の歩を伸ばす。'},{f:[8,4,8,5],n:''},{f:[7,9,7,8],n:'金で角頭を守る。'},{f:[3,3,3,4],n:''},{f:[2,6,2,5],n:'さらに飛車先を伸ばす。'},{f:[2,2,3,3],n:'後手は角で受ける。'},{f:[3,9,3,8],n:'銀を上がり棒銀へ。'},{f:[7,1,7,2],n:''} ] },
+  { name:'矢倉（相居飛車）', side:0, desc:'金銀でがっちり組む堅い囲い。相居飛車の王道です。',
+    moves:[ {f:[7,7,7,6],n:'角道を開ける。'},{f:[3,3,3,4],n:''},{f:[6,7,6,6],n:'角道を止め矢倉の含み。'},{f:[8,3,8,4],n:''},{f:[6,9,7,8],n:'金を7八へ。矢倉の骨組み。'},{f:[7,1,6,2],n:''},{f:[5,7,5,6],n:'5筋も突き駒組みを進める。'},{f:[5,1,4,2],n:''} ] },
+];
+JOSEKI.forEach(o=>o.mv=o.moves.map(m=>jmv(m.f)));
+
+let jsIndex=0, jsPos=0, jsPractice=false, jsBusy=false;
+function josekiPosition(pos){
+  const st={board:initBoard(),hands:[{},{}],turn:0,last:null}; const o=JOSEKI[jsIndex];
+  let ls=null; for(let i=0;i<pos;i++){ applyMove(st,o.mv[i]); ls=[o.mv[i].tr,o.mv[i].tc]; }
+  return {st, lastSq: pos>0?[o.mv[pos-1].tr,o.mv[pos-1].tc]:null};
+}
+function josekiNote(pos){ // pos手目(1-based)の表記
+  const o=JOSEKI[jsIndex]; const pre=josekiPosition(pos-1); G.lastKifuSq=pre.lastSq;
+  return moveNotation(o.mv[pos-1], pre.st.board, (pos-1)%2);
+}
+function josekiRenderInfo(){
+  const o=JOSEKI[jsIndex]; const el=document.getElementById('josekiInfo');
+  let comment;
+  if(jsPos===0) comment = jsPractice ? '先手（あなた）から。定跡どおりに指してみましょう。' : '「次へ▶」で一手ずつ進めます。';
+  else { const m=o.moves[jsPos-1]; comment='<b>'+josekiNote(jsPos)+'</b>'+(m.n?'　'+m.n:''); }
+  el.innerHTML='<div class="jt">'+o.name+'（'+jsPos+'／'+o.mv.length+'手）'+(jsPractice?' ・練習':' ・解説')+'</div>'+
+    '<div class="jd">'+o.desc+'</div><div class="jc">'+comment+'</div>';
+}
+function josekiGoto(pos){
+  const o=JOSEKI[jsIndex]; pos=Math.max(0,Math.min(o.mv.length,pos)); jsPos=pos;
+  const p=josekiPosition(pos);
+  G.board=p.st.board; G.hands=p.st.hands; G.turn=p.st.turn;
+  G.last = pos>0 ? {fr:o.mv[pos-1].fr,fc:o.mv[pos-1].fc,tr:o.mv[pos-1].tr,tc:o.mv[pos-1].tc,drop:false} : null;
+  selected=null; legalForSel=[]; adviceMarks=[];
+  render(); josekiRenderInfo();
+  if(jsPractice){
+    if(jsPos>=o.mv.length) setStatus('この定跡は終わりです。お疲れさまでした！');
+    else if(jsPos%2===o.side) setStatus('あなたの手番：定跡どおりに指してみましょう');
+    else setStatus('相手の手番（自動で指します）');
+  } else setStatus(jsPos>=o.mv.length?'最後まで進みました':'「次へ▶」で一手ずつ進みます');
+}
+function startJoseki(idx){
+  G.mode='joseki'; jsIndex=(idx+JOSEKI.length)%JOSEKI.length; jsPos=0; jsBusy=false;
+  G.over=false; G.busy=false; G.kifu=[]; G.kifuMoves=[]; G.lastKifuSq=null; G.human=JOSEKI[jsIndex].side;
+  G.clock={enabled:false}; renderClocks(); resetReview();
+  document.getElementById('result').classList.remove('on');
+  updateNames(); renderKifu(); josekiGoto(0);
+}
+function josekiNext(){ if(G.mode==='joseki' && jsPos<JOSEKI[jsIndex].mv.length) josekiGoto(jsPos+1); }
+function josekiPrev(){ if(G.mode==='joseki' && jsPos>0) josekiGoto(jsPos-1); }
+function josekiTogglePractice(){ jsPractice=!jsPractice;
+  document.getElementById('jsPractice').textContent = jsPractice?'👀 解説に戻す':'✋ 自分で指す'; josekiGoto(jsPos); }
+function josekiCellClick(r,c){
+  if(jsBusy || !jsPractice) return;
+  const o=JOSEKI[jsIndex]; if(jsPos>=o.mv.length || jsPos%2!==o.side) return;
+  const pc=G.board[r][c];
+  if(selected){ const hit=legalForSel.find(m=>m.tr===r&&m.tc===c); if(hit){ josekiDoMove(hit); return; } }
+  if(pc && pc.o===o.side){ selected={r,c}; legalForSel=legalMoves({board:G.board,hands:G.hands,turn:G.turn,last:G.last},G.turn).filter(m=>!m.drop&&m.fr===r&&m.fc===c); render(); return; }
+  selected=null; legalForSel=[]; render();
+}
+function josekiDoMove(mv){
+  const o=JOSEKI[jsIndex]; const exp=o.mv[jsPos];
+  if(!mv.drop){ const both=legalForSel.filter(m=>m.tr===mv.tr&&m.tc===mv.tc);
+    if(both.some(m=>m.promote)&&both.some(m=>!m.promote)){ mv=both.find(m=>!!m.promote===!!exp.promote)||mv; } }
+  selected=null; legalForSel=[];
+  const match = exp.fr===mv.fr&&exp.fc===mv.fc&&exp.tr===mv.tr&&exp.tc===mv.tc && (!!exp.promote===!!mv.promote);
+  if(match){
+    josekiGoto(jsPos+1);
+    if(jsPos<o.mv.length && jsPos%2!==o.side){ jsBusy=true; setStatus('正解！ 相手の手を指します…');
+      setTimeout(()=>{ jsBusy=false; if(G.mode==='joseki') josekiGoto(jsPos+1); }, 650); }
+    else setStatus('正解！');
+  } else {
+    render(); setStatus('定跡と違います。ここは '+josekiNote(jsPos+1)+' が定跡（「次へ▶」でお手本）', 'warn');
+  }
+}
+
 /* ================= UI ================= */
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -868,7 +965,7 @@ function renderClocks(){
 function timeUpLose(side){ if(G.over) return; endGame(side===G.human?'あなたの負け（時間切れ）':'あなたの勝ち（相手の時間切れ）', side===G.human?'loss':'win'); }
 function clockTick(){
   const c=G.clock;
-  const paused = !c || !c.enabled || G.over || reviewIndex!==null || G.mode==='tsume' || document.querySelector('.overlay.on');
+  const paused = !c || !c.enabled || G.over || reviewIndex!==null || G.mode==='tsume' || G.mode==='joseki' || document.querySelector('.overlay.on');
   if(paused){ if(c) c.lastTs=null; return; }
   const now=performance.now();
   if(c.lastTs===null){ c.lastTs=now; return; }
@@ -905,6 +1002,7 @@ function newGame(){
   G.mode = document.getElementById('modeSel').value;
   G.level = parseInt(document.getElementById('levelSel').value,10);
   if(G.mode==='tsume'){ startTsume(G.tsumeIndex); return; }
+  if(G.mode==='joseki'){ startJoseki(jsIndex); return; }
   G.board = initBoard(); G.hands = [{},{}]; G.turn = 0;
   G.handicap = document.getElementById('handicapSel').value;
   if(G.handicap && G.handicap!=='none'){
@@ -1146,6 +1244,7 @@ function recordKifu(mv, mover){
 function curLegal(){ return legalMoves({board:G.board,hands:G.hands,turn:G.turn,last:G.last}, G.turn); }
 
 function onCellClick(r,c){
+  if(G.mode==='joseki'){ josekiCellClick(r,c); return; }
   if(reviewIndex!==null){ exitReview(); return; }   // 再生中は現局面に戻す
   if(G.over||G.busy) return;
   if(G.turn!==G.human) return;
@@ -1163,6 +1262,7 @@ function onCellClick(r,c){
   selected=null; legalForSel=[]; render();
 }
 function onHandClick(owner,t){
+  if(G.mode==='joseki') return;   // 定跡モードは持ち駒操作なし
   if(reviewIndex!==null){ exitReview(); return; }
   if(G.over||G.busy) return;
   if(G.turn!==G.human || owner!==G.human) return;
@@ -1551,16 +1651,22 @@ function closeAdvice(){
 }
 
 function applyModeControls(m){
-  const tsume = (m==='tsume');
+  const tsume = (m==='tsume'), joseki = (m==='joseki');
+  const gameLike = (m==='play'||m==='teach');
   document.getElementById('adviceBtn').classList.toggle('hidden', m!=='teach');   // 指導ボタンは指導モードのみ
   document.getElementById('tsumeControls').classList.toggle('hidden', !tsume);
   document.getElementById('tsumeInfo').classList.toggle('hidden', !tsume);
-  // 詰将棋では対局専用の設定を隠す
-  ['sideWrap','handiWrap','clockWrap'].forEach(id=>document.getElementById(id).classList.toggle('hidden', tsume));
-  document.getElementById('suspendBtn').classList.toggle('hidden', tsume);
-  document.getElementById('resumeBtn').classList.toggle('hidden', tsume);
+  document.getElementById('josekiControls').classList.toggle('hidden', !joseki);
+  document.getElementById('josekiInfo').classList.toggle('hidden', !joseki);
+  document.getElementById('newBtn').classList.toggle('hidden', tsume||joseki);   // 新規対局は対局系のみ
+  document.getElementById('undoBtn').classList.toggle('hidden', joseki);
+  // 対局専用の設定は詰将棋・定跡では隠す
+  ['sideWrap','handiWrap','clockWrap'].forEach(id=>document.getElementById(id).classList.toggle('hidden', !gameLike));
+  document.getElementById('suspendBtn').classList.toggle('hidden', !gameLike);
+  document.getElementById('resumeBtn').classList.toggle('hidden', !gameLike);
   document.getElementById('hintText').textContent =
       m==='tsume' ? '先手（あなた）だけを動かして、受方の玉を詰ませてください。持ち駒を打つ／盤上の駒を動かす、どちらもOK。'
+    : m==='joseki'? '戦法を選び「次へ▶」で一手ずつ解説。「✋自分で指す」で定跡どおりに指す練習ができます。'
     : m==='teach' ? 'CPUと対局しながら、「指導」ボタンで次の一手の候補（最善手から3つ）を表示できます。'
     :               '駒をタップ→行き先をタップで移動。持ち駒はタップして盤上へ打てます。';
 }
@@ -1672,6 +1778,16 @@ document.getElementById('tsumeFilter').onchange=()=>{ const l=filteredTsumeIndic
 document.getElementById('tsumeReset').onclick=()=>startTsume(G.tsumeIndex);
 document.getElementById('tsumeHint').onclick=tsumeHint;
 document.getElementById('tsumeSolBtn').onclick=showTsumeSolution;
+
+// 定跡モードの配線
+(function(){ const sel=document.getElementById('josekiSel');
+  JOSEKI.forEach((o,i)=>{ const op=document.createElement('option'); op.value=i; op.textContent=o.name; sel.appendChild(op); });
+})();
+document.getElementById('josekiSel').onchange=e=>startJoseki(parseInt(e.target.value,10));
+document.getElementById('jsFirst').onclick=()=>josekiGoto(0);
+document.getElementById('jsPrev').onclick=josekiPrev;
+document.getElementById('jsNext').onclick=josekiNext;
+document.getElementById('jsPractice').onclick=josekiTogglePractice;
 
 /* ===== 見た目テーマ ===== */
 const THEME_KEY='shogi_theme_v1';
