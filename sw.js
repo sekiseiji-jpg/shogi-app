@@ -1,5 +1,5 @@
 /* 本将棋 PWA サービスワーカー（オフライン対応） */
-const CACHE = 'shogi-v3';
+const CACHE = 'shogi-v4';
 const ASSETS = [
   './',
   './index.html',
